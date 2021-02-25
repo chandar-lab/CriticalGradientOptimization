@@ -1,3 +1,10 @@
+'''
+Dense Convulutional Network implementaiton for CIFAR
+
+Original Paper: https://arxiv.org/pdf/1608.06993.pdf
+Implementation from https://github.com/NVlabs/AdaBatch/blob/master/models/cifar/densenet.py
+'''
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

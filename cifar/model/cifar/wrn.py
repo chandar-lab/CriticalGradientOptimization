@@ -1,3 +1,10 @@
+"""
+Wide Residual Networks implementation
+
+Original Paper: https://arxiv.org/pdf/1605.07146.pdf
+Implementation from https://github.com/NVlabs/AdaBatch/blob/master/models/cifar/wrn.py
+"""
+
 import math
 import torch
 import torch.nn as nn

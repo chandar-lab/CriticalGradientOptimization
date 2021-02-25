@@ -8,8 +8,8 @@ import torch.nn as nn
 import torch.optim as optim
 import wandb
 
-from EncoderDecoder import EncoderDecoder
-from Models import ConvNetEncoder, ClassDecoder, LogisticRegression, FCLayer
+from encoder_decoder import EncoderDecoder
+from models import ConvNetEncoder, ClassDecoder, LogisticRegression, FCLayer
 
 sys.path.append('..')
 from data_loader import load_data_subset

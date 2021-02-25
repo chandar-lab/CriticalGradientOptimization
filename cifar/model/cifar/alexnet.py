@@ -1,6 +1,9 @@
 '''AlexNet for CIFAR10. FC layers are removed. Paddings are adjusted.
 Without BN, the start learning rate should be 0.01
-(c) YANG, Wei 
+(c) YANG, Wei
+
+Original Paper: https://papers.nips.cc/paper/2012/file/c399862d3b9d6b76c8436e924a68c45b-Paper.pdf
+Implementation from https://github.com/NVlabs/AdaBatch/blob/master/models/cifar/alexnet.py
 '''
 import torch.nn as nn
 

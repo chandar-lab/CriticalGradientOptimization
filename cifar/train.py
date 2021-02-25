@@ -1,4 +1,4 @@
-from Model.Convnets import CIFAR10CNNModel, CIFAR100CNNModel, CIFAR100CNNModel_noDropOut
+from model.convnets import CIFAR10CNNModel, CIFAR100CNNModel, CIFAR100CNNModel_noDropOut
 
 import torch.optim as optim
 
@@ -11,7 +11,7 @@ import wandb
 
 from itertools import product
 
-import Model.cifar as models
+import model.cifar as models
 
 sys.path.append('..')
 from data_loader import load_data_subset

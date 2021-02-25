@@ -1,5 +1,8 @@
 '''VGG for CIFAR10. FC layers are removed.
-(c) YANG, Wei 
+(c) YANG, Wei
+
+Original Paper: https://arxiv.org/pdf/1608.06993.pdf
+Implementation from https://github.com/NVlabs/AdaBatch/blob/master/models/cifar/vgg.py
 '''
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo

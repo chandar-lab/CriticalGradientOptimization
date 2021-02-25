@@ -13,3 +13,5 @@ mkdir Dataset
 
 cd Dataset
 ```
+
+Credit for CIFAR networks: [NVIDIA Research](https://github.com/NVlabs/AdaBatch/tree/master/models/cifar)
