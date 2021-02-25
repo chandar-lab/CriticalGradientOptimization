@@ -6,6 +6,8 @@ Although the history of gradients summarized in meta-parameters or explicitly st
 We propose a class of memory-augmented gradient descent optimizers that retain only the *critical* gradients, as defined by the L2-norm of the gradients, as opposed to the entire history. 
 This repository contains these memory-agumented optimizers as well as numerous models to test them on.
 
+This repository contains the code used in the paper *Memory Augmented Optimizers* by Parthasarathi, McRae, and Chandar. (Link will be added when posted to arXiv).
+
 ## Installation 
 
 All experiments were run using Python 3.6. Logging of results was handled using the WandB API. To install all prerequisites you can run:
