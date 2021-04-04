@@ -14,12 +14,16 @@ from models import ConvNetEncoder, ClassDecoder, LogisticRegression, FCLayer
 sys.path.append('..')
 from data_loader import load_data_subset
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
+from optimizers.optimExperimental import SAGA, SGD_FIFO, AggMo, SGD_C_new
+
+#os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
+#os.environ["WANDB_MODE"] = "dryrun"
 
 # commandline arguments
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--data_path', type=str, default='./Dataset')
+parser.add_argument('--data_path', type=str, default='../Dataset')
 parser.add_argument('--results_path', type=str, default='.')
 
 parser.add_argument('--batch_size', type=int, default=64)
@@ -62,13 +66,14 @@ def train(model, iterator, optimizer, criterion, clip=10):
         loss = criterion(output, trg)
         loss.backward()
 
-        wandb.log({"Iteration Training Loss": loss})
-
         # clip the gradients
         torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
 
         # update the parameters
-        optimizer.step()
+        if isinstance(optimizer, SAGA):
+            optimizer.step(index=i)
+        else:
+            optimizer.step()
         stats = optimizer.getOfflineStats()
         if stats:
             for k, v in stats.items():
@@ -121,8 +126,12 @@ def HyperEvaluate(config):
     """
     torch.manual_seed(config['seed'])
 
-    N_EPOCHS = 25  # number of epochs
-    BATCH_SIZE = args.batch_size
+    if config['optim'] == 'SAGA':
+        N_EPOCHS = 25            # number of epochs
+        BATCH_SIZE = 1
+    else:
+        N_EPOCHS = 25           # number of epochs
+        BATCH_SIZE = args.batch_size
 
     if '_C' in config['optim']:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr']) + '_topC_' + str(
@@ -130,7 +139,8 @@ def HyperEvaluate(config):
     else:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
-    wandb.init(project="Critical-Gradients-mnist-" + str(config['model']), reinit=True)
+    #wandb.init(project="Critical-Gradients-mnist-" + str(config['model']), reinit=True)
+    wandb.init(project="Critical-Gradients-new-mnist-" + str(config['model']), reinit=True)
     wandb.run.name = run_id
 
     wandb.config.update(config)
@@ -140,7 +150,7 @@ def HyperEvaluate(config):
     if not os.path.exists(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
 
-    train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(data_aug=1, batch_size=BATCH_SIZE,
+    train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(data_aug=0, batch_size=BATCH_SIZE,
                                                                                      workers=0, dataset='mnist',
                                                                                      data_target_dir=data_path,
                                                                                      labels_per_class=5000,
@@ -167,8 +177,13 @@ def HyperEvaluate(config):
             optimizer = SGD(model.parameters(), lr=config['lr'])
         elif config['optim'] == 'SGDM':
             optimizer = SGD(model.parameters(), lr=config['lr'], momentum=0.9)
+        elif config['optim'] == 'AggMo':
+            optimizer = AggMo(model.parameters(), lr=config['lr'], momenta=[0.9, 0.99])
         elif config['optim'] == 'SGD_C':
             optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
+                              aggr=config['aggr'])
+        elif config['optim'] == 'SGD_C_new':
+            optimizer = SGD_C_new(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
                               aggr=config['aggr'])
         elif config['optim'] == 'SGDM_C':
             optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9, decay=config['decay'],
@@ -183,6 +198,8 @@ def HyperEvaluate(config):
         elif config['optim'] == 'RMSprop_C':
             optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                                   topC=config['topC'], aggr=config['aggr'])
+        elif config['optim'] == 'SAGA':
+            optimizer = SAGA(model.parameters(), lr = config['lr'], n_samples = len(train_iterator.dataset))
         criterion = nn.CrossEntropyLoss().to(device)
 
     best_validation_perf = float('-inf')
@@ -225,14 +242,55 @@ PARAM_GRID = list(product(
     ['LR'],  # model
     [100, 101, 102, 103, 104],  # seeds
     ['mnist'],  # dataset
-    ['Adam_C'],  # optimizer
-    [0.0001],  # lr
-    [0.75],  # decay
-    [5, 10, 20, 50, 100],  # topC
-    ['mean'],  # sum
+    ['SGD_C_new'],  # optimizer
+    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
+    [0.7, 0.9],  # decay
+    [5, 10, 20],  # topC
+    ['sum', 'mean'],  # sum
     [1.0],  # kappa
     [True]  # Stats
 ))
+
+PARAM_GRID0 = list(product(
+    ['LR'],  # model
+    [100, 101, 102, 103, 104],  # seeds
+    ['mnist'],  # dataset
+    ['SGD_C_new'],  # optimizer
+    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
+    [0.7, 0.9],  # decay
+    [5, 10, 20],  # topC
+    ['sum', 'mean'],  # sum
+    [1.0],  # kappa
+    [False]  # Stats
+))
+
+PARAM_GRID1 = list(product(
+    ['LR'],  # model
+    [100, 101, 102, 103, 104],  # seeds
+    ['mnist'],  # dataset
+    ['SGD_C'],  # optimizer
+    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
+    [0.7, 0.9],  # decay
+    [5, 10, 20],  # topC
+    ['sum'],  # sum
+    [1.0],  # kappa
+    [False]  # Stats
+))
+
+PARAM_GRID2 = list(product(
+    ['LR'],  # model
+    [100, 101, 102, 103, 104],  # seeds
+    ['mnist'],  # dataset
+    ['SGD'],  # optimizer
+    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
+    [0.7, 0.9],  # decay
+    [5, 10, 20],  # topC
+    ['sum'],  # sum
+    [1.0],  # kappa
+    [False]  # Stats
+))
+
+PARAM_GRID = PARAM_GRID0 + PARAM_GRID1 + PARAM_GRID2
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -266,5 +324,5 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
         config['topC'] = 0
         config['kappa'] = 0
 
-    val_loss, test_loss, test_ppl = HyperEvaluate(config)
-    wandb.log({'Best Validation Loss': val_loss, 'Best Test Loss': test_loss, 'Best Test Perplexity': test_ppl})
+    val_perf, test_loss, test_perf = HyperEvaluate(config)
+    wandb.log({'Best Validation Accuracy': val_perf, 'Best Test Loss': test_loss, 'Best Test Perplexity': test_perf})

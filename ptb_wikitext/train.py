@@ -13,6 +13,10 @@ from itertools import product
 
 sys.path.append('..')
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
+from optimizers.optimExperimental import Adam_C_bottom
+
+os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
+os.environ["WANDB_MODE"] = "dryrun"
 
 # commandline arguments
 
@@ -217,7 +221,7 @@ def HyperEvaluate(config):
     # dependence of e. g. 'g' on 'f' can not be learned, but allows more efficient
     # batch processing.
 
-    N_EPOCHS = 25  # number of epochs
+    N_EPOCHS = 50  # number of epochs
     CLIP = 0.25  # gradient clip value    # directory name to save the models.
     if '_C' in config['optim']:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr']) + '_topC_' + str(
@@ -226,7 +230,8 @@ def HyperEvaluate(config):
     else:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
-    wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'], reinit=True)
+    # wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'], reinit=True)
+    wandb.init(project="Critical-Gradients-EXT", reinit=True)
     wandb.run.name = run_id
 
     wandb.config.update(config)
@@ -261,20 +266,26 @@ def HyperEvaluate(config):
         optimizer = SGD(model.parameters(), lr=config['lr'], momentum=0.9)
     elif config['optim'] == 'SGD_C':
         optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
-                          aggr=config['aggr'])
+                          aggr=config['aggr'], critical_test=config['crit_test'], sampling=config['sampling'])
     elif config['optim'] == 'SGDM_C':
         optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9, decay=config['decay'], topC=config['topC'],
-                          aggr=config['aggr'])
+                          aggr=config['aggr'], critical_test=config['crit_test'],
+                          sampling=config['sampling'])
     elif config['optim'] == 'Adam_C':
         optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                           topC=config['topC'], aggr=config['aggr'])
+                           topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
+                           sampling=config['sampling'])
+    elif config['optim'] == 'Adam_C_bottom':
+        optimizer = Adam_C_bottom(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
+                                  topC=config['topC'], aggr=config['aggr'])
     elif config['optim'] == 'Adam':
         optimizer = Adam(model.parameters(), lr=config['lr'])
     elif config['optim'] == 'RMSprop':
         optimizer = RMSprop(model.parameters(), lr=config['lr'])
     elif config['optim'] == 'RMSprop_C':
         optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                              topC=config['topC'], aggr=config['aggr'])
+                              topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
+                              sampling=config['sampling'])
 
     best_val_ppl = float('inf')
     best_test_ppl = float('inf')
@@ -288,13 +299,18 @@ def HyperEvaluate(config):
         on = offline_stats['yes'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
         val_loss, val_ppl = test(model, val_data, ntokens, args.bptt, criterion)
         test_loss, test_ppl = test(model, test_data, ntokens, args.bptt, criterion)
-        wandb.log({"Train Loss": train_loss, "Validation Loss": val_loss, "Validation Perplexity": val_ppl,
-                   "Test Loss": test_loss, "Test Perplexity": test_ppl, "offline updates": off, "online udpates": on})
-
+        if not config['stats']:
+            wandb.log({"Train Loss": train_loss, "Validation Loss": val_loss, "Validation Perplexity": val_ppl,
+                       "Test Loss": test_loss, "Test Perplexity": test_ppl, "offline updates": off,
+                       "online udpates": on})
         # If triggered, will log stats on the values of the average gc and ct
-        if config['stats']:
+        else:
             gc_v_gt = optimizer.getAnalysis()
-            wandb.log({'gt': gc_v_gt['gt'] / gc_v_gt['count'], 'gc': gc_v_gt['gc'] / gc_v_gt['count']})
+            wandb.log({"Train Loss": train_loss, "Validation Loss": val_loss, "Validation Perplexity": val_ppl,
+                       "Test Loss": test_loss, "Test Perplexity": test_ppl, "offline updates": off,
+                       "online udpates": on, 'gt': gc_v_gt['gt'] / gc_v_gt['count'],
+                       'gc': gc_v_gt['gc'] / gc_v_gt['count'], 'gc_aggr': gc_v_gt['gc_aggr'] / gc_v_gt['count']}
+                      )
 
         optimizer.resetOfflineStats()
 
@@ -315,15 +331,17 @@ def HyperEvaluate(config):
 PARAM_GRID = list(product(
     ['LSTM'],  # model
     [100, 101, 102, 103, 104],  # seeds
-    ['ptb', 'wikitext'],  # dataset
-    ['RMSprop_C', 'Adam_C'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0.7, 0.9],  # decay
-    [10],  # topC
-    ['mean'],  # sum
+    ['ptb'],  # dataset
+    ['Adam_C'],  # optimizer
+    [0.0001],  # lr
+    [0.9],  # decay
+    [20],  # topC
+    ['mean'],  # gradsum
     [1.0],  # kappa
     [True],  # stats
-    [2, 4]  # layers
+    [1],  # layers
+    ['cos-diversity'],  # sampling
+    [True]  # crit-test
 ))
 
 # total number of slurm workers detected
@@ -338,7 +356,7 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
 
     params = PARAM_GRID[param_ix]
 
-    m, s, d, o, l, dec, t, ch, k, ts, ly = params
+    m, s, d, o, l, dec, t, ch, k, ts, ly, sm, ct = params
 
     config = {}
     config['model'] = m
@@ -346,18 +364,23 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     config['lr'] = l
     config['dataset'] = d
     config['optim'] = o
-    config['stats'] = ts
     config['layers'] = ly
     if "_C" in o:
         config['decay'] = dec
         config['aggr'] = ch
         config['topC'] = t
         config['kappa'] = k
+        config['stats'] = ts
+        config['crit_test'] = ct
+        config['sampling'] = sm
     else:
         config['decay'] = 0
         config['aggr'] = 'none'
         config['topC'] = 0
         config['kappa'] = 0
+        config['stats'] = False
+        config['crit_test'] = ct
+        config['sampling'] = None
 
     val_ppl, test_loss, test_ppl = HyperEvaluate(config)
     wandb.log({'Best Validation Perplexity': val_ppl, 'Best Test Loss': test_loss, 'Best Test Perplexity': test_ppl})
