@@ -4,6 +4,7 @@
 *.csv
 *.pyc
 *.lock
+*.txt
 *.pt
 *Results/*
 *.zip
@@ -13,7 +14,6 @@ Dataset/*
 */Graphs
 **/wandb
 .ipynb_checkpoints/*
-synced.txt
 *.sh
 *mycache/*
 .idea/*
@@ -28,3 +28,5 @@ Figures/*
 /venv/
 *train2.py
 *train3.py
+*train4.py
+*/Histograms/*

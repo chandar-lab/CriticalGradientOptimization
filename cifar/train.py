@@ -16,7 +16,7 @@ import model.cifar as models
 sys.path.append('..')
 from data_loader import load_data_subset
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import Adam_C_bottom, SGD_C_bottom
+from optimizers.optimExperimental import Adam_C_bottom, SGD_C_bottom, AggMo, SGD_C_new, AggMo_C
 
 os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
 os.environ["WANDB_MODE"] = "dryrun"
@@ -211,6 +211,13 @@ def HyperEvaluate(config):
         optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                               topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
                               sampling=config['sampling'], alpha=config['alpha'])
+    elif config['optim'] == 'SGD_C_new':
+            optimizer = SGD_C_new(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
+                              aggr=config['aggr'])
+    elif config['optim'] == 'AggMo_C':
+        optimizer = AggMo_C(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99], decay=config['decay'],
+                            topC=config['topC'], aggr=config['aggr'])
+
     criterion = nn.CrossEntropyLoss()
 
     best_validation_perf = float('-inf')
@@ -255,67 +262,22 @@ def HyperEvaluate(config):
     return best_validation_perf, best_test_loss, best_test_perf
 
 
-PARAM_GRID1 = list(product(
+PARAM_GRID = list(product(
     ['convnet'],  # model
     [100, 101, 102, 103, 104],  # seeds
-    ['cifar10'],  # dataset
-    ['SGD'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0],  # decay
-    [0],  # topC
-    ['none'],  # gradsum
-    [0.9], # momentum
-    [0.9], #beta1
-    [0.999], #beta2
-    [0.9] #alpha
-))
-
-PARAM_GRID2 = list(product(
-    ['convnet'],  # model
-    [100, 101, 102, 103, 104],  # seeds
-    ['cifar10'],  # dataset
-    ['SGD_C'],  # optimizer
+    ['cifar10', 'cifar100'],  # dataset
+    ['AggMo_C'],  # optimizer
     [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
     [0.7, 0.9, 0.99],  # decay
     [5, 10, 20],  # topC
     ['sum'],  # gradsum
-    [0.9],  # momentum
-    [0.9],  # beta1
-    [0.999],  # beta2
-    [0.9]  # alpha
+    [0], # momentum
+    [0], #beta1
+    [0.], #beta2
+    [0] #alpha
 ))
 
-PARAM_GRID3 = list(product(
-    ['convnet'],  # model
-    [100, 101, 102, 103, 104],  # seeds
-    ['cifar10'],  # dataset
-    ['SGDM'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0],  # decay
-    [0],  # topC
-    ['none'],  # gradsum
-    [0.9, 0.99, 0.999], # momentum
-    [0.9], #beta1
-    [0.999], #beta2
-    [0.9] #alpha
-))
 
-PARAM_GRID4 = list(product(
-    ['convnet'],  # model
-    [100, 101, 102, 103, 104],  # seeds
-    ['cifar10'],  # dataset
-    ['SGDM_C'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0.7, 0.9, 0.99],  # decay
-    [5, 10, 20],  # topC
-    ['sum'],  # gradsum
-    [0.9, 0.99, 0.999], # momentum
-    [0.9], #beta1
-    [0.999], #beta2
-    [0.9] #alpha
-))
-
-PARAM_GRID = PARAM_GRID1 + PARAM_GRID2 + PARAM_GRID3 + PARAM_GRID4
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM

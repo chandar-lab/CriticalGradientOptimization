@@ -8,13 +8,17 @@ import torch.nn as nn
 import torch.optim as optim
 import wandb
 
+import matplotlib.pyplot as plt
+
+import pandas as pd
+
 from encoder_decoder import EncoderDecoder
 from models import ConvNetEncoder, ClassDecoder, LogisticRegression, FCLayer
 
 sys.path.append('..')
 from data_loader import load_data_subset
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import SAGA, SGD_FIFO, AggMo, SGD_C_new
+from optimizers.optimExperimental import SAGA, SGD_FIFO, AggMo, SGD_C_new, AggMo_original, AggMo_C, SGD_C_HIST
 
 #os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
 #os.environ["WANDB_MODE"] = "dryrun"
@@ -32,6 +36,8 @@ args = parser.parse_args()
 
 data_path = args.data_path
 results_path = args.results_path
+
+os.environ["WANDB_DIR"] = results_path
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -150,6 +156,13 @@ def HyperEvaluate(config):
     if not os.path.exists(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
 
+    if "HIST" in config['optim']:
+        HISTOGRAM_SAVE_PATH = os.path.join('./Histograms', config['dataset'], config['model'] + '_' + config['optim'],
+                                       'Model',
+                                       run_id)
+        if not os.path.exists(HISTOGRAM_SAVE_PATH):
+            os.makedirs(HISTOGRAM_SAVE_PATH)
+
     train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(data_aug=0, batch_size=BATCH_SIZE,
                                                                                      workers=0, dataset='mnist',
                                                                                      data_target_dir=data_path,
@@ -178,12 +191,17 @@ def HyperEvaluate(config):
         elif config['optim'] == 'SGDM':
             optimizer = SGD(model.parameters(), lr=config['lr'], momentum=0.9)
         elif config['optim'] == 'AggMo':
-            optimizer = AggMo(model.parameters(), lr=config['lr'], momenta=[0.9, 0.99])
+            optimizer = AggMo(model.parameters(), lr=config['lr'], momenta=[0, 0.9, 0.99])
+        elif config['optim'] == 'AggMo_original':
+            optimizer = AggMo_original(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99])
         elif config['optim'] == 'SGD_C':
             optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
                               aggr=config['aggr'])
         elif config['optim'] == 'SGD_C_new':
             optimizer = SGD_C_new(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
+                              aggr=config['aggr'])
+        elif config['optim'] == 'SGD_C_HIST':
+            optimizer = SGD_C_HIST(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
                               aggr=config['aggr'])
         elif config['optim'] == 'SGDM_C':
             optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9, decay=config['decay'],
@@ -235,62 +253,38 @@ def HyperEvaluate(config):
         if test_perf > best_test_perf:
             best_test_perf = test_perf
 
+        if "HIST" in config["optim"]:
+            optimizer.epoch()
+
+    if "HIST" in config["optim"]:
+        age_at_removal, age_at_epoch_end = optimizer.get_ages()
+        n_bins = min(10, max(age_at_removal)-min(age_at_removal))
+        plt.hist(age_at_removal, bins = n_bins)
+        savename = os.path.join(HISTOGRAM_SAVE_PATH, 'Age_At_Removal.png')
+        plt.savefig(fname=savename)
+        plt.clf()
+        n_bins = min(10, max(age_at_epoch_end)-min(age_at_epoch_end))
+        plt.hist(age_at_epoch_end, bins=n_bins)
+        savename = os.path.join(HISTOGRAM_SAVE_PATH, 'Age_At_Epoch_End.png')
+        plt.savefig(fname=savename)
+        plt.clf()
+
     return best_validation_perf, best_test_loss, best_test_perf
 
 
 PARAM_GRID = list(product(
-    ['LR'],  # model
-    [100, 101, 102, 103, 104],  # seeds
+    ['LR', 'NeuralNet'],  # model
+    [100], # , 101, 102, 103, 104],  # seeds
     ['mnist'],  # dataset
-    ['SGD_C_new'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0.7, 0.9],  # decay
-    [5, 10, 20],  # topC
-    ['sum', 'mean'],  # sum
-    [1.0],  # kappa
-    [True]  # Stats
-))
-
-PARAM_GRID0 = list(product(
-    ['LR'],  # model
-    [100, 101, 102, 103, 104],  # seeds
-    ['mnist'],  # dataset
-    ['SGD_C_new'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0.7, 0.9],  # decay
-    [5, 10, 20],  # topC
-    ['sum', 'mean'],  # sum
-    [1.0],  # kappa
-    [False]  # Stats
-))
-
-PARAM_GRID1 = list(product(
-    ['LR'],  # model
-    [100, 101, 102, 103, 104],  # seeds
-    ['mnist'],  # dataset
-    ['SGD_C'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0.7, 0.9],  # decay
+    ['SGD_C_HIST'],  # optimizer
+    [0.01],  # lr
+    [0.7, 0.9, 0.99],  # decay
     [5, 10, 20],  # topC
     ['sum'],  # sum
     [1.0],  # kappa
     [False]  # Stats
 ))
 
-PARAM_GRID2 = list(product(
-    ['LR'],  # model
-    [100, 101, 102, 103, 104],  # seeds
-    ['mnist'],  # dataset
-    ['SGD'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0.7, 0.9],  # decay
-    [5, 10, 20],  # topC
-    ['sum'],  # sum
-    [1.0],  # kappa
-    [False]  # Stats
-))
-
-PARAM_GRID = PARAM_GRID0 + PARAM_GRID1 + PARAM_GRID2
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -325,4 +319,22 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
         config['kappa'] = 0
 
     val_perf, test_loss, test_perf = HyperEvaluate(config)
-    wandb.log({'Best Validation Accuracy': val_perf, 'Best Test Loss': test_loss, 'Best Test Perplexity': test_perf})
+    wandb.log({'Best Validation Accuracy': val_perf, 'Best Test Loss': test_loss, 'Best Test Accuracy': test_perf})
+
+# total number of slurm workers detected
+# defaults to 1 if not running under SLURM
+N_WORKERS = int(os.getenv('SLURM_ARRAY_TASK_COUNT', 1))
+
+# this worker's array index. Assumes slurm array job is zero-indexed
+# defaults to zero if not running under SLURM
+this_worker = int(os.getenv('SLURM_ARRAY_TASK_ID', 0))
+
+df = pd.read_csv('SGD_C_to_run.csv')
+params = df.to_dict(orient='records')
+
+for param_ix in range(this_worker, len(df), N_WORKERS):
+
+    config = params[param_ix]
+
+    val_ppl, test_loss, test_ppl = HyperEvaluate(config)
+    wandb.log({'Best Validation Accuracy': val_ppl, 'Best Test Loss': test_loss, 'Best Test Accuracy': test_ppl})
