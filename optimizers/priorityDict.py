@@ -1,6 +1,9 @@
 from heapq import heapify, heappush, heappop
 import torch
+import random
 from copy import deepcopy
+
+random.seed(100)
 
 
 class HeapItem:
@@ -32,12 +35,16 @@ class priority_dict(dict):
         self._heap = [HeapItem(k, v) for k, v in self.items()]
         self._rebuild_heap()
 
+    def getNorms(self):
+        return [item.p for item in self._heap]
+
     def size(self):
         return len(self._heap)
 
-    def sethyper(self, decay_rate=0.5, K=5):
+    def sethyper(self, decay_rate=0.5, K=5, sampling=None):
         self.k = K
         self.decay_rate = decay_rate
+        self.sampling = sampling
 
     def _reorder(self):
         self._heap = deepcopy(self._heap[-self.k:])
@@ -47,7 +54,7 @@ class priority_dict(dict):
             del self[k]
 
     def _rebuild_heap(self):
-        self._heap = [it for it in self._heap if it.p >= 0.0] # >= used as fix for errors in some data
+        self._heap = [it for it in self._heap if it.p >= 0.0]  # >= used as fix for errors in some data
         if len(self._heap) > 0:
             heapify(self._heap)
             if not self.isEmpty() and self.isFull():
@@ -81,8 +88,28 @@ class priority_dict(dict):
         it = self._heap[0]
         return it.p
 
+    def getmin(self):
+        """
+        Get smallest gradient
+        :return: The smallest gradient
+        """
+        return self._heap[0].t
+
+    def getmax(self):
+        "Returns the largest gradient"
+        max = self._heap[0]
+        for it in self._heap[1:]:
+            if max.p < it.p:
+                max = it
+        return max.t
+
+    def getmedian(self):
+        "Returns the median gradient"
+        sorted_list = sorted(self._heap, key=lambda x: x.p)
+        return sorted_list[len(self._heap) // 2].t
+
     def gradmean(self):
-        """Return the sum of top k gradients
+        """Return the mean of top k gradients
         """
 
         mean = torch.clone(self._heap[0].t)
@@ -108,10 +135,52 @@ class priority_dict(dict):
         return len(self._heap)
 
     def __setitem__(self, key, val):
-        # We are not going to remove the previous value from the heap,
-        # since this would have a cost O(n).
+        if self.isFull():
+            if self.sampling == "pure_random":
+                if random.uniform(0, 1) < 0.5:
+                    item = random.choices(self._heap)[0]
+                    self._heap.remove(item)
+                    self._heap.append(HeapItem(key, val))
+            if self.sampling == "random":
+                item = random.choices(self._heap)[0]
+                self._heap.remove(item)
+                self._heap.append(HeapItem(key, val))
+            elif self.sampling == "proportional":
+                norm_sum = sum([it.t.norm() for it in self._heap])
+                weights = [1 - (it.t.norm() / norm_sum) for it in self._heap]
+                item = random.choices(self._heap, weights=weights)[0]
+                self._heap.remove(item)
+                self._heap.append(HeapItem(key, val))
+            elif self.sampling == "mean_diversity":
+                av = self.gradmean()
+                prob = min(1., (torch.sub(av, val).norm()) / av.norm())
+                if random.uniform(0, 1) <= prob:
+                    self._heap.append(HeapItem(key, val))
+            elif self.sampling == "cos_diversity":
+                av = torch.flatten(self.gradmean())
+                flat = torch.flatten(val)
+                prob = (torch.dot(flat, av) / (flat.norm() * av.norm()) - 1.) * -0.5
+                if random.uniform(0, 1) <= prob:
+                    self._heap.append(HeapItem(key, val))
+            elif self.sampling == "cos_diversity_keep_backwards":
+                av = self.gradmean()
+                prob = min(1., -(torch.dot(val, av) / (val.norm() * av.norm()) - 1.))
+                if random.uniform(0, 1) <= prob:
+                    self._heap.append(HeapItem(key, val))
+            elif self.sampling == "cos_diversity_not_backwards":
+                av = self.gradmean()
+                prob = min(1., -(torch.dot(val, av) / (val.norm() * av.norm()) - 1.))
+                if random.uniform(0, 1) <= prob:
+                    self._heap.append(HeapItem(key, val))
+            else:
+                self._heap.append(HeapItem(key, val))
+        else:
+            if self.sampling == "pure-random" and not self.isEmpty():
+                if random.uniform(0, 1) < 0.5:
+                    self._heap.append(HeapItem(key, val))
+            else:
+                self._heap.append(HeapItem(key, val))
 
-        self._heap.append(HeapItem(key, val))
         self._rebuild_heap()
 
     def setdefault(self, key, val):

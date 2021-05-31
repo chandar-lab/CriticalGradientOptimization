@@ -24,18 +24,42 @@ def aggregate(d_p, crit_buf, func, kappa=1.0):
     :return: Aggregated total gradient
     """
 
-    if "sum" in func:
+    if "sum" == func:
         crit_buf_ = crit_buf.gradmean()
         crit_buf_.mul_(kappa)
         return torch.add(d_p, crit_buf_)
-    elif "mid" in func:
+    elif "mid" == func:
         crit_buf_ = crit_buf.gradmean()
         crit_buf_.mul_(kappa)
         return torch.mul(torch.add(d_p, crit_buf_), 0.5)
-    elif "mean" in func:
+    elif "mean" == func:
         crit_buf_ = crit_buf.gradsum()
         crit_buf_.mul_(kappa)
         return torch.div(torch.add(d_p, crit_buf_), crit_buf.size() + 1)
+    elif "min" == func:
+        crit_buf_ = crit_buf.getmin()
+        crit_buf_.mul_(kappa)
+        return torch.add(d_p, crit_buf_)
+    elif "median" == func:
+        crit_buf_ = crit_buf.getmedian()
+        crit_buf_.mul_(kappa)
+        return torch.add(d_p, crit_buf_)
+    elif "max" == func:
+        crit_buf_ = crit_buf.getmax()
+        crit_buf_.mul_(kappa)
+        return torch.add(d_p, crit_buf_)
+    elif "min-mean" == func:
+        crit_buf_ = crit_buf.getmin()
+        crit_buf_.mul_(kappa)
+        return torch.mul(torch.add(d_p, crit_buf_), 0.5)
+    elif "median-mean" == func:
+        crit_buf_ = crit_buf.getmedian()
+        crit_buf_.mul_(kappa)
+        return torch.mul(torch.add(d_p, crit_buf_), 0.5)
+    elif "max-mean" == func:
+        crit_buf_ = crit_buf.getmax()
+        crit_buf_.mul_(kappa)
+        return torch.mul(torch.add(d_p, crit_buf_), 0.5)
     else:
         raise ValueError("Invalid aggregation function")
 
@@ -153,7 +177,7 @@ class SGD_C(Optimizer):
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
                  weight_decay=0, momentum=0.,
-                 decay=0.7, topC=10, aggr='sum'):
+                 decay=0.7, topC=10, aggr='sum', sampling=None, critical_test=True):
 
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -166,7 +190,7 @@ class SGD_C(Optimizer):
 
         defaults = dict(lr=lr, kappa=kappa, dampening=dampening,
                         weight_decay=weight_decay, momentum=momentum,
-                        aggr=aggr, decay=decay, gradHist={}, topC=topC)
+                        aggr=aggr, decay=decay, gradHist={}, topC=topC, sampling=sampling, critical_test=critical_test)
 
         super(SGD_C, self).__init__(params, defaults)
         self.resetOfflineStats()
@@ -179,7 +203,7 @@ class SGD_C(Optimizer):
         return self.g_analysis
 
     def resetAnalysis(self):
-        self.g_analysis = {'gt': 0., 'gc': 0., 'count': 0}
+        self.g_analysis = {'gt': 0., 'gc': 0., 'count': 0, 'gc_aggr': 0}
 
     def resetOfflineStats(self):
         self.offline_grad = {'yes': 0, 'no': 0}
@@ -196,7 +220,6 @@ class SGD_C(Optimizer):
         loss = None
         if closure is not None:
             loss = closure()
-        count = 0.0
         for group in self.param_groups:
             weight_decay = group['weight_decay']
             kappa = group['kappa']
@@ -205,7 +228,8 @@ class SGD_C(Optimizer):
             momentum = group['momentum']
             topc = group['topC']
             aggr = group['aggr']
-            count += 0.
+            sampling = group['sampling']
+            critical_test = group['critical_test']
 
             for p in group['params']:
                 if p.grad is None:
@@ -218,18 +242,21 @@ class SGD_C(Optimizer):
                     param_state = self.state[p]
                     if 'critical gradients' not in param_state:
                         crit_buf = param_state['critical gradients'] = priority_dict()
-                        crit_buf.sethyper(decay_rate=decay, K=topc)
+                        crit_buf.sethyper(decay_rate=decay, K=topc, sampling=sampling)
                         crit_buf[d_p_norm] = deepcopy(d_p)
                     else:
                         crit_buf = param_state['critical gradients']
-                        #
                         aggr_grad = aggregate(d_p, crit_buf, aggr, kappa)
                         if crit_buf.isFull():
-                            if d_p_norm > crit_buf.pokesmallest():
+                            if critical_test:
+                                if d_p_norm > crit_buf.pokesmallest():
+                                    self.offline_grad['yes'] += 1
+                                    crit_buf[d_p_norm] = deepcopy(d_p)
+                                else:
+                                    self.offline_grad['no'] += 1
+                            else:
                                 self.offline_grad['yes'] += 1
                                 crit_buf[d_p_norm] = deepcopy(d_p)
-                            else:
-                                self.offline_grad['no'] += 1
                         else:
                             crit_buf[d_p_norm] = deepcopy(d_p)
                         d_p = aggr_grad
@@ -237,6 +264,14 @@ class SGD_C(Optimizer):
                     self.g_analysis['gc'] += crit_buf.averageTopC()
                     self.g_analysis['count'] += 1
                     self.g_analysis['gt'] += p.grad.data.norm()
+                    if 'mid' in aggr:
+                        self.g_analysis['gc_aggr'] += crit_buf.getmin().norm()
+                    elif 'median' in aggr:
+                        self.g_analysis['gc_aggr'] += crit_buf.getmedian().norm()
+                    elif 'max' in aggr:
+                        self.g_analysis['gc_aggr'] += crit_buf.getmax().norm()
+                    else:
+                        self.g_analysis['gc_aggr'] += crit_buf.averageTopC()
 
                     crit_buf.decay()
 
@@ -388,7 +423,7 @@ class Adam_C(Optimizer):
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
                  decay=0.7, kappa=1.0, topC=10,
-                 weight_decay=0, amsgrad=False, aggr='mean'):
+                 weight_decay=0, amsgrad=False, aggr='mean', sampling=None, critical_test=True):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -403,7 +438,7 @@ class Adam_C(Optimizer):
             raise ValueError("Invalid alpha value: {}".format(topC))
         defaults = dict(lr=lr, betas=betas, eps=eps,
                         weight_decay=weight_decay, aggr=aggr, amsgrad=amsgrad,
-                        kappa=kappa, topC=topC, decay=decay)
+                        kappa=kappa, topC=topC, decay=decay, sampling=sampling, critical_test=critical_test)
 
         super(Adam_C, self).__init__(params, defaults)
         self.resetOfflineStats()
@@ -424,7 +459,7 @@ class Adam_C(Optimizer):
         return self.g_analysis
 
     def resetAnalysis(self):
-        self.g_analysis = {'gt': 0., 'gc': 0., 'count': 0}
+        self.g_analysis = {'gt': 0., 'gc': 0., 'count': 0, 'gc_aggr': 0}
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -450,6 +485,8 @@ class Adam_C(Optimizer):
                 decay = group['decay']
                 topc = group['topC']
                 aggr = group['aggr']
+                sampling = group['sampling']
+                critical_test = group['critical_test']
 
                 state = self.state[p]
 
@@ -462,7 +499,7 @@ class Adam_C(Optimizer):
                     state['exp_avg_sq'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
                     if kappa > 0.:
                         state['critical gradients'] = priority_dict()
-                        state['critical gradients'].sethyper(decay_rate=decay, K=topc)
+                        state['critical gradients'].sethyper(decay_rate=decay, K=topc, sampling=sampling)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
@@ -471,11 +508,15 @@ class Adam_C(Optimizer):
                     if kappa > 0.:
                         aggr_grad = aggregate(grad, state['critical gradients'], aggr)
                         if state['critical gradients'].isFull():
-                            if grad_norm > state['critical gradients'].pokesmallest():
+                            if critical_test:
+                                if grad_norm > state['critical gradients'].pokesmallest():
+                                    self.offline_grad['yes'] += 1
+                                    state['critical gradients'][grad_norm] = deepcopy(grad)
+                                else:
+                                    self.offline_grad['no'] += 1
+                            else:
                                 self.offline_grad['yes'] += 1
                                 state['critical gradients'][grad_norm] = deepcopy(grad)
-                            else:
-                                self.offline_grad['no'] += 1
                         else:
                             state['critical gradients'][grad_norm] = deepcopy(grad)
                     grad = aggr_grad
@@ -508,6 +549,14 @@ class Adam_C(Optimizer):
                 self.g_analysis['gc'] += state['critical gradients'].averageTopC()
                 self.g_analysis['count'] += 1
                 self.g_analysis['gt'] += p.grad.data.norm()
+                if 'mid' in aggr:
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmin().norm()
+                elif 'median' in aggr:
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmedian().norm()
+                elif 'max' in aggr:
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmax().norm()
+                else:
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].averageTopC()
 
                 state['critical gradients'].decay()
 
@@ -641,7 +690,7 @@ class RMSprop_C(Optimizer):
 
     def __init__(self, params, lr=1e-2, alpha=0.99, eps=1e-8, weight_decay=0,
                  momentum=0, centered=False, decay=0.7, kappa=1.0,
-                 topC=10, aggr='mean'):
+                 topC=10, aggr='mean', sampling=None, critical_test=True):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
