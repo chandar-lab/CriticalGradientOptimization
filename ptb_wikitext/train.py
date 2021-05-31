@@ -13,7 +13,7 @@ from itertools import product
 
 sys.path.append('..')
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import Adam_C_bottom
+from optimizers.optimExperimental import Adam_C_bottom, AggMo, AggMo_C
 
 os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
 os.environ["WANDB_MODE"] = "dryrun"
@@ -231,7 +231,7 @@ def HyperEvaluate(config):
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
     # wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'], reinit=True)
-    wandb.init(project="Critical-Gradients-EXT", reinit=True)
+    wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'] + "_ext", reinit=True)
     wandb.run.name = run_id
 
     wandb.config.update(config)
@@ -286,6 +286,11 @@ def HyperEvaluate(config):
         optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                               topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
                               sampling=config['sampling'])
+    elif config['optim'] == 'AggMo_C':
+        optimizer = AggMo_C(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99], decay=config['decay'],
+                            topC=config['topC'], aggr=config['aggr'])
+    elif config['optim'] == 'AggMo':
+        optimizer = AggMo(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99])
 
     best_val_ppl = float('inf')
     best_test_ppl = float('inf')
@@ -295,6 +300,7 @@ def HyperEvaluate(config):
 
         train_loss, offline_stats = train(model, train_data, optimizer, ntokens, args.bptt, args.clip, args.batch_size,
                                           criterion)
+        print("epoch done")
         off = offline_stats['no'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
         on = offline_stats['yes'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
         val_loss, val_ppl = test(model, val_data, ntokens, args.bptt, criterion)
@@ -328,21 +334,38 @@ def HyperEvaluate(config):
     return best_val_ppl, best_test_loss, best_test_ppl
 
 
-PARAM_GRID = list(product(
+PARAM_GRID0 = list(product(
     ['LSTM'],  # model
     [100, 101, 102, 103, 104],  # seeds
-    ['ptb'],  # dataset
-    ['Adam_C'],  # optimizer
-    [0.0001],  # lr
-    [0.9],  # decay
-    [20],  # topC
-    ['mean'],  # gradsum
-    [1.0],  # kappa
-    [True],  # stats
-    [1],  # layers
-    ['cos-diversity'],  # sampling
-    [True]  # crit-test
+    ['ptb', 'wikitext'],  # dataset
+    ['AggMo'],  # optimizer
+    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
+    [0],  # decay
+    [0],  # topC
+    ['none'],  # gradsum
+    [0], # momentum
+    [0], #beta1
+    [0.], #beta2
+    [0] #alpha
 ))
+
+PARAM_GRID1 = list(product(
+    ['LSTM'],  # model
+    [100, 101, 102, 103, 104],  # seeds
+    ['ptb', 'wikitext'],  # dataset
+    ['AggMo_C'],  # optimizer
+    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
+    [0.7, 0.9, 0.99],  # decay
+    [5, 10, 20],  # topC
+    ['mean', 'sum'],  # gradsum
+    [0], # momentum
+    [0], #beta1
+    [0.], #beta2
+    [0] #alpha
+))
+
+
+PARAM_GRID = PARAM_GRID0 + PARAM_GRID1
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -356,7 +379,7 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
 
     params = PARAM_GRID[param_ix]
 
-    m, s, d, o, l, dec, t, ch, k, ts, ly, sm, ct = params
+    m, s, d, o, l, dec, t, ch, p, b1, b2, a = params
 
     config = {}
     config['model'] = m
@@ -364,23 +387,33 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     config['lr'] = l
     config['dataset'] = d
     config['optim'] = o
-    config['layers'] = ly
+    config['stats'] = False
+    config['crit_test'] = True
+    config['sampling'] = None
+    config['kappa'] = 1.0
+    config['layers'] = 1
     if "_C" in o:
         config['decay'] = dec
         config['aggr'] = ch
         config['topC'] = t
-        config['kappa'] = k
-        config['stats'] = ts
-        config['crit_test'] = ct
-        config['sampling'] = sm
     else:
         config['decay'] = 0
         config['aggr'] = 'none'
         config['topC'] = 0
-        config['kappa'] = 0
-        config['stats'] = False
-        config['crit_test'] = ct
-        config['sampling'] = None
+    if "SGDM" in o:
+        config['momentum'] = p
+    else:
+        config['momentum'] = 0
+    if "Adam" in o:
+        config['beta1'] = b1
+        config['beta2'] = b2
+    else:
+        config['beta1'] = 0
+        config['beta2'] = 0
+    if "RMS" in o:
+        config['alpha'] = a
+    else:
+        config['alpha'] = 0
 
     val_ppl, test_loss, test_ppl = HyperEvaluate(config)
     wandb.log({'Best Validation Perplexity': val_ppl, 'Best Test Loss': test_loss, 'Best Test Perplexity': test_ppl})

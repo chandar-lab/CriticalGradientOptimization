@@ -2,12 +2,14 @@ import math
 import torch
 from torch.optim import Optimizer
 from .priorityDict import priority_dict
+from .priorityDictHist import priority_dict as priority_dict_hist
 from copy import deepcopy
 
 """
 Collection of Experimental optimizers developed during our research. Included for completeness.
 """
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def aggregate(d_p, crit_buf, func, kappa=1.0):
     if "sum" in func:
@@ -1341,7 +1343,8 @@ class RMSprop_C_double(Optimizer):
         self.offline_grad = {'yes': 0, 'no': 0}
 
 
-class AggMo(Optimizer):
+class AggMo_custom(Optimizer):
+    # Custom Implementation of the AggMo optimizer. Not used in favor of original version.
 
     def __init__(self, params, lr=0.001, momenta=[], dampening=0,
                  weight_decay=0):
@@ -1352,11 +1355,11 @@ class AggMo(Optimizer):
 
         defaults = dict(lr=lr, momenta=torch.tensor(momenta).to(device), dampening=dampening,
                         weight_decay=weight_decay)
-        super(AggMo, self).__init__(params, defaults)
+        super(AggMo_custom, self).__init__(params, defaults)
         self.resetOfflineStats()
 
     def __setstate__(self, state):
-        super(AggMo, self).__setstate__(state)
+        super(AggMo_custom, self).__setstate__(state)
         for group in self.param_groups:
             group.setdefault('nesterov', False)
 
@@ -1389,7 +1392,7 @@ class AggMo(Optimizer):
                 if len(momenta) != 0 and all(momentum != 0.0 for momentum in momenta):
                     param_state = self.state[p]
                     if 'momentum_buffer' not in param_state:
-                        buf = param_state['momentum_buffer'] = torch.stack([torch.clone(d_p).detach()]*len(momenta))
+                        buf = param_state['momentum_buffer'] = torch.stack([torch.clone(d_p).detach()] * len(momenta))
                         vec = param_state['momentum'] = torch.clone(momenta)
                         while vec.dim() < buf.dim(): vec.unsqueeze_(1)
                     else:
@@ -1398,9 +1401,149 @@ class AggMo(Optimizer):
                         buf.mul_(vec)
                         buf.add_(d_p, alpha=1 - dampening)
 
-                    d_p = torch.mean(buf, dim = 0)
+                    d_p = torch.mean(buf, dim=0)
 
                 p.data.add_(d_p, alpha=-group['lr'])
+
+        return loss
+
+
+class SGD_C_HIST(Optimizer):
+    """
+    Implementation of SGD (and optionally SGD with momentum) with critical gradients.
+    Replaces current-iteration gradient in conventional PyTorch implementation with
+    an aggregation of current gradient and critical gradients.
+    Conventional SGD or SGD with momentum can be recovered by setting kappa=0.
+    The critical-gradient-specific keyword parameters are tuned for good
+    off-the-shelf performance, though additional tuning may be required for best results
+    """
+
+    def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
+                 weight_decay=0, momentum=0.,
+                 decay=0.7, topC=10, aggr='sum'):
+
+        if momentum < 0.0:
+            raise ValueError("Invalid momentum value: {}".format(momentum))
+        if weight_decay < 0.0:
+            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
+        if not 0.0 <= decay and not 1.0 > decay:
+            raise ValueError("Invalid alpha value: {}".format(decay))
+        if not 0.0 <= topC:
+            raise ValueError("Invalid alpha value: {}".format(topC))
+
+        defaults = dict(lr=lr, kappa=kappa, dampening=dampening,
+                        weight_decay=weight_decay, momentum=momentum,
+                        aggr=aggr, decay=decay, gradHist={}, topC=topC)
+
+        super(SGD_C_HIST, self).__init__(params, defaults)
+        self.resetOfflineStats()
+        self.resetAnalysis()
+
+        self._age_at_removal = []
+        self._age_at_epoch_end = []
+
+    def getOfflineStats(self):
+        return self.offline_grad
+
+    def getAnalysis(self):
+        return self.g_analysis
+
+    def resetAnalysis(self):
+        self.g_analysis = {'gt': 0., 'gc': 0., 'count': 0}
+
+    def resetOfflineStats(self):
+        self.offline_grad = {'yes': 0, 'no': 0}
+
+    def __setstate__(self, state):
+        super(SGD_C_HIST, self).__setstate__(state)
+
+    def get_ages(self):
+        return (self._age_at_removal, self._age_at_epoch_end)
+
+    def epoch(self):
+        param_state = self.state[self.param_groups[0]['params'][0]] # This is gross AF but it works
+        crit_buf = param_state['critical gradients']
+        epoch_ages = crit_buf.epoch()
+        for age in epoch_ages:
+            self._age_at_epoch_end.append(age)
+
+    def step(self, closure=None):
+        """Performs a single optimization step.
+        Arguments:
+            closure (callable, optional): A closure that reevaluates the model
+                and returns the loss.
+        """
+        loss = None
+        if closure is not None:
+            loss = closure()
+        for group in self.param_groups:
+            weight_decay = group['weight_decay']
+            kappa = group['kappa']
+            dampening = group['dampening']
+            decay = group['decay']
+            momentum = group['momentum']
+            topc = group['topC']
+            aggr = group['aggr']
+
+            total_norm = 0.0
+
+            age_to_keep = 0.0
+
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                d_p = p.grad.data
+                total_norm += torch.sqrt(torch.sum(torch.square(d_p)))
+
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                d_p = p.grad.data
+                if weight_decay != 0:
+                    d_p = d_p.add(weight_decay, p.data)
+                if kappa != 0:
+                    param_state = self.state[p]
+                    if 'critical gradients' not in param_state:
+                        crit_buf = param_state['critical gradients'] = priority_dict_hist()
+                        crit_buf.sethyper(decay_rate=decay, K=topc)
+                        crit_buf[total_norm] = deepcopy(d_p)
+                    else:
+                        crit_buf = param_state['critical gradients']
+                        aggr_grad = aggregate(d_p, crit_buf, aggr, kappa)
+                        if crit_buf.isFull():
+                            if total_norm > crit_buf.pokesmallest():
+                                self.offline_grad['yes'] += 1
+                                age_to_keep = crit_buf.pokesmallest_age()
+                                crit_buf[total_norm] = deepcopy(d_p)
+                            else:
+                                self.offline_grad['no'] += 1
+                        else:
+                            crit_buf[total_norm] = deepcopy(d_p)
+                        d_p = aggr_grad
+
+                    self.g_analysis['gc'] += crit_buf.averageTopC()
+                    self.g_analysis['count'] += 1
+                    self.g_analysis['gt'] += p.grad.data.norm()
+
+                    crit_buf.decay()
+                    crit_buf.step()
+
+                    if momentum != 0:
+                        param_state = self.state[p]
+                        if 'momentum_buffer' not in param_state:
+                            buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
+                        else:
+                            buf = param_state['momentum_buffer']
+                            buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
+                        # if nesterov:
+                        #     d_p = d_p.add(momentum, buf)
+                        # else:
+                        d_p = buf
+
+                p.data.add_(d_p, alpha=-group['lr'])
+
+            if age_to_keep > 0:
+                self._age_at_removal.append(age_to_keep)
 
         return loss
 
@@ -1524,3 +1667,212 @@ class SGD_C_new(Optimizer):
 
         return loss
 
+
+class AggMo(Optimizer):
+    r"""Implements Aggregated Momentum Gradient Descent
+    Original Paper: https://arxiv.org/pdf/1804.00325.pdf
+    Code: https://github.com/AtheMathmo/AggMo
+    """
+
+    def __init__(self, params, lr=0.1, betas=[0.0, 0.9, 0.99], weight_decay=0):
+        defaults = dict(lr=lr, betas=betas, weight_decay=weight_decay)
+        super(AggMo, self).__init__(params, defaults)
+        self.resetOfflineStats()
+        self.resetAnalysis()
+
+    def getOfflineStats(self):
+        return self.offline_grad
+
+    def getAnalysis(self):
+        return self.g_analysis
+
+    def resetAnalysis(self):
+        self.g_analysis = {'gt': 0., 'gc': 0., 'count': 0}
+
+    def resetOfflineStats(self):
+        self.offline_grad = {'yes': 0, 'no': 0}
+
+    @classmethod
+    def from_exp_form(cls, params, lr=0.1, a=0.1, k=3, weight_decay=0):
+        betas = [1 - a ** i for i in range(k)]
+        return cls(params, lr, betas, weight_decay)
+
+    def __setstate__(self, state):
+        super(AggMo, self).__setstate__(state)
+
+    def step(self, closure=None):
+        """Performs a single optimization step.
+        Arguments:
+            closure (callable, optional): A closure that reevaluates the model
+                and returns the loss.
+        """
+        loss = None
+        if closure is not None:
+            loss = closure()
+
+        for group in self.param_groups:
+            weight_decay = group['weight_decay']
+            betas = group['betas']
+            total_mom = float(len(betas))
+
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                d_p = p.grad.data
+                if weight_decay != 0:
+                    d_p.add_(weight_decay, p.data)
+                param_state = self.state[p]
+                if 'momentum_buffer' not in param_state:
+                    param_state['momentum_buffer'] = {}
+                    for beta in betas:
+                        param_state['momentum_buffer'][beta] = torch.zeros_like(p.data)
+                for beta in betas:
+                    buf = param_state['momentum_buffer'][beta]
+                    # import pdb; pdb.set_trace()
+                    buf.mul_(beta).add_(d_p)
+                    p.data.sub_(group['lr'] / total_mom, buf)
+        return loss
+
+    def zero_momentum_buffers(self):
+        for group in self.param_groups:
+            betas = group['betas']
+            for p in group['params']:
+                param_state = self.state[p]
+                param_state['momentum_buffer'] = {}
+                for beta in betas:
+                    param_state['momentum_buffer'][beta] = torch.zeros_like(p.data)
+
+    def update_hparam(self, name, value):
+        for param_group in self.param_groups:
+            param_group[name] = value
+
+
+class AggMo_C(Optimizer):
+    r"""Implements Aggregated Momentum Gradient Descent
+    """
+
+    def __init__(self, params, lr=0.1, betas=[0.0, 0.9, 0.99], weight_decay=0, dampening = 0.0, decay=0.7, topC=10, aggr='sum',
+                 sampling=None, critical_test=True, kappa = 1.0):
+
+        if any(momentum < 0.0 for momentum in betas):
+            raise ValueError("Invalid beta value!")
+        if weight_decay < 0.0:
+            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
+        if not 0.0 <= decay and not 1.0 > decay:
+            raise ValueError("Invalid alpha value: {}".format(decay))
+        if not 0.0 <= topC:
+            raise ValueError("Invalid alpha value: {}".format(topC))
+
+        defaults = dict(lr=lr, weight_decay=weight_decay, betas=betas, kappa = kappa, dampening=dampening,
+                        aggr=aggr, decay=decay, gradHist={}, topC=topC, sampling=sampling, critical_test=critical_test)
+
+        super(AggMo_C, self).__init__(params, defaults)
+        self.resetOfflineStats()
+        self.resetAnalysis()
+
+    def getOfflineStats(self):
+        return self.offline_grad
+
+    def getAnalysis(self):
+        return self.g_analysis
+
+    def resetAnalysis(self):
+        self.g_analysis = {'gt': 0., 'gc': 0., 'count': 0}
+
+    def resetOfflineStats(self):
+        self.offline_grad = {'yes': 0, 'no': 0}
+
+    @classmethod
+    def from_exp_form(cls, params, lr=0.1, a=0.1, k=3, weight_decay=0):
+        betas = [1 - a ** i for i in range(k)]
+        return cls(params, lr, betas, weight_decay)
+
+    def __setstate__(self, state):
+        super(AggMo_C, self).__setstate__(state)
+
+    def step(self, closure=None):
+        """Performs a single optimization step.
+        Arguments:
+            closure (callable, optional): A closure that reevaluates the model
+                and returns the loss.
+        """
+        loss = None
+        if closure is not None:
+            loss = closure()
+
+        for group in self.param_groups:
+            weight_decay = group['weight_decay']
+            betas = group['betas']
+            total_mom = float(len(betas))
+            dampening = group['dampening']
+            decay = group['decay']
+            topc = group['topC']
+            aggr = group['aggr']
+            kappa = group['kappa']
+
+            total_norm = 0.0
+
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                d_p = p.grad.data
+                total_norm += torch.sqrt(torch.sum(torch.square(d_p)))
+
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+
+                d_p = p.grad.data
+                if weight_decay != 0:
+                    d_p = d_p.add(weight_decay, p.data)
+                if kappa != 0:
+                    param_state = self.state[p]
+                    if 'critical gradients' not in param_state:
+                        crit_buf = param_state['critical gradients'] = priority_dict()
+                        crit_buf.sethyper(decay_rate=decay, K=topc)
+                        crit_buf[total_norm] = deepcopy(d_p)
+                    else:
+                        crit_buf = param_state['critical gradients']
+                        aggr_grad = aggregate(d_p, crit_buf, aggr, 1.0)
+                        if crit_buf.isFull():
+                            if total_norm > crit_buf.pokesmallest():
+                                self.offline_grad['yes'] += 1
+                                crit_buf[total_norm] = deepcopy(d_p)
+                            else:
+                                self.offline_grad['no'] += 1
+                        else:
+                            crit_buf[total_norm] = deepcopy(d_p)
+                        d_p = aggr_grad
+
+                    self.g_analysis['gc'] += crit_buf.averageTopC()
+                    self.g_analysis['count'] += 1
+                    self.g_analysis['gt'] += p.grad.data.norm()
+
+                    crit_buf.decay()
+
+                if weight_decay != 0:
+                    d_p.add_(weight_decay, p.data)
+                param_state = self.state[p]
+                if 'momentum_buffer' not in param_state:
+                    param_state['momentum_buffer'] = {}
+                    for beta in betas:
+                        param_state['momentum_buffer'][beta] = torch.zeros_like(p.data)
+                for beta in betas:
+                    buf = param_state['momentum_buffer'][beta]
+                    # import pdb; pdb.set_trace()
+                    buf.mul_(beta).add_(d_p)
+                    p.data.sub_(group['lr'] / total_mom, buf)
+        return loss
+
+    def zero_momentum_buffers(self):
+        for group in self.param_groups:
+            betas = group['betas']
+            for p in group['params']:
+                param_state = self.state[p]
+                param_state['momentum_buffer'] = {}
+                for beta in betas:
+                    param_state['momentum_buffer'][beta] = torch.zeros_like(p.data)
+
+    def update_hparam(self, name, value):
+        for param_group in self.param_groups:
+            param_group[name] = value
