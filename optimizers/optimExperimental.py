@@ -1344,6 +1344,7 @@ class RMSprop_C_double(Optimizer):
 
 
 class AggMo_custom(Optimizer):
+    # Custom Implementation of the AggMo optimizer. Not used in favor of original version.
 
     def __init__(self, params, lr=0.001, momenta=[], dampening=0,
                  weight_decay=0):
@@ -1669,6 +1670,8 @@ class SGD_C_new(Optimizer):
 
 class AggMo(Optimizer):
     r"""Implements Aggregated Momentum Gradient Descent
+    Original Paper: https://arxiv.org/pdf/1804.00325.pdf
+    Code: https://github.com/AtheMathmo/AggMo
     """
 
     def __init__(self, params, lr=0.1, betas=[0.0, 0.9, 0.99], weight_decay=0):
