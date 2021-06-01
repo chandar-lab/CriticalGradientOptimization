@@ -16,7 +16,7 @@ import model.cifar as models
 sys.path.append('..')
 from data_loader import load_data_subset
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import Adam_C_bottom, SGD_C_bottom, AggMo, SGD_C_new, AggMo_C
+from optimizers.optimExperimental import Adam_C_bottom, SGD_C_bottom, AggMo, SGD_C_new, AggMo_C, Adam_FIFO, SGD_FIFO
 
 os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
 os.environ["WANDB_MODE"] = "dryrun"
@@ -122,7 +122,7 @@ def HyperEvaluate(config):
     torch.manual_seed(config['seed'])
 
     N_EPOCHS = 100  # number of epochs
-    BATCH_SIZE = args.batch_size
+    BATCH_SIZE = config['batch'] #args.batch_size
 
     if '_C' in config['optim']:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr']) + '_topC_' + str(
@@ -131,8 +131,8 @@ def HyperEvaluate(config):
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
     #wandb.init(project="Critical-Gradients-" + config['dataset'], reinit=True)
-    wandb.init(project="Critical-Gradients-" + config['dataset'] + "_ext", reinit=True)
-    #wandb.init(project="Critical-Gradients-EXT", reinit=True)
+    #wandb.init(project="Critical-Gradients-" + config['dataset'] + "_ext", reinit=True)
+    wandb.init(project="Critical-Gradients-EXT", reinit=True)
     wandb.run.name = run_id
 
     wandb.config.update(config)
@@ -192,6 +192,10 @@ def HyperEvaluate(config):
         optimizer = SGD_C_bottom(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
                           aggr=config['aggr'], critical_test=config['crit_test'], sampling=config['sampling'])
 
+    elif config['optim'] == 'SGD_FIFO':
+        optimizer = SGD_FIFO(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
+                          aggr=config['aggr'], critical_test=config['crit_test'], sampling=config['sampling'])
+
     elif config['optim'] == 'SGDM_C':
         optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=config['momentum'], decay=config['decay'], topC=config['topC'],
                           aggr=config['aggr'], critical_test=config['crit_test'],
@@ -202,6 +206,9 @@ def HyperEvaluate(config):
                            sampling=config['sampling'], betas = (config['beta1'], config['beta2']))
     elif config['optim'] == 'Adam_C_bottom':
         optimizer = Adam_C_bottom(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
+                                  topC=config['topC'], aggr=config['aggr'])
+    elif config['optim'] == 'Adam_FIFO':
+        optimizer = Adam_FIFO(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                                   topC=config['topC'], aggr=config['aggr'])
     elif config['optim'] == 'Adam':
         optimizer = Adam(model.parameters(), lr=config['lr'], betas = (config['beta1'], config['beta2']))
@@ -261,23 +268,26 @@ def HyperEvaluate(config):
 
     return best_validation_perf, best_test_loss, best_test_perf
 
-
-PARAM_GRID = list(product(
+PARAM_GRID3 = list(product(
     ['convnet'],  # model
     [100, 101, 102, 103, 104],  # seeds
-    ['cifar10', 'cifar100'],  # dataset
-    ['AggMo_C'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0.7, 0.9, 0.99],  # decay
-    [5, 10, 20],  # topC
-    ['sum'],  # gradsum
+    ['cifar10'],  # dataset
+    ['SGD'],  # optimizer
+    [0.01],  # lr
+    [0.9],  # decay
+    [20],  # topC
+    ['sum'],  # aggr
     [0], # momentum
     [0], #beta1
     [0.], #beta2
-    [0] #alpha
+    [0], #alpha
+    [True], #crit-test
+    ["KotH"], #sampling
+    [64, 1300]
 ))
 
 
+PARAM_GRID = PARAM_GRID3
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -291,7 +301,7 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
 
     params = PARAM_GRID[param_ix]
 
-    m, s, d, o, l, dec, t, ch, p, b1, b2, a = params
+    m, s, d, o, l, dec, t, ch, p, b1, b2, a, ct, sam, batch = params
 
     config = {}
     config['model'] = m
@@ -300,10 +310,11 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     config['dataset'] = d
     config['optim'] = o
     config['stats'] = False
-    config['crit_test'] = True
-    config['sampling'] = None
+    config['crit_test'] = ct
+    config['sampling'] = sam
     config['kappa'] = 1.0
-    if "_C" in o:
+    config['batch'] = batch
+    if "_C" in o or "FIFO" in o:
         config['decay'] = dec
         config['aggr'] = ch
         config['topC'] = t

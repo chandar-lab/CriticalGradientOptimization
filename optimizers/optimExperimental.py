@@ -1460,7 +1460,7 @@ class SGD_C_HIST(Optimizer):
         return (self._age_at_removal, self._age_at_epoch_end)
 
     def epoch(self):
-        param_state = self.state[self.param_groups[0]['params'][0]] # This is gross AF but it works
+        param_state = self.state[self.param_groups[0]['params'][0]]  # This is gross but it works
         crit_buf = param_state['critical gradients']
         epoch_ages = crit_buf.epoch()
         for age in epoch_ages:
@@ -1545,6 +1545,7 @@ class SGD_C_HIST(Optimizer):
                 self._age_at_removal.append(age_to_keep)
 
         return loss
+
 
 class SGD_C_new(Optimizer):
     """
@@ -1748,8 +1749,9 @@ class AggMo_C(Optimizer):
     r"""Implements Aggregated Momentum Gradient Descent
     """
 
-    def __init__(self, params, lr=0.1, betas=[0.0, 0.9, 0.99], weight_decay=0, dampening = 0.0, decay=0.7, topC=10, aggr='sum',
-                 sampling=None, critical_test=True, kappa = 1.0):
+    def __init__(self, params, lr=0.1, betas=[0.0, 0.9, 0.99], weight_decay=0, dampening=0.0, decay=0.7, topC=10,
+                 aggr='sum',
+                 sampling=None, critical_test=True, kappa=1.0):
 
         if any(momentum < 0.0 for momentum in betas):
             raise ValueError("Invalid beta value!")
@@ -1760,7 +1762,7 @@ class AggMo_C(Optimizer):
         if not 0.0 <= topC:
             raise ValueError("Invalid alpha value: {}".format(topC))
 
-        defaults = dict(lr=lr, weight_decay=weight_decay, betas=betas, kappa = kappa, dampening=dampening,
+        defaults = dict(lr=lr, weight_decay=weight_decay, betas=betas, kappa=kappa, dampening=dampening,
                         aggr=aggr, decay=decay, gradHist={}, topC=topC, sampling=sampling, critical_test=critical_test)
 
         super(AggMo_C, self).__init__(params, defaults)

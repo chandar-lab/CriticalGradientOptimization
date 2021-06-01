@@ -13,7 +13,7 @@ from itertools import product
 
 sys.path.append('..')
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import Adam_C_bottom, AggMo, AggMo_C
+from optimizers.optimExperimental import Adam_C_bottom, AggMo, AggMo_C, Adam_FIFO
 
 os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
 os.environ["WANDB_MODE"] = "dryrun"
@@ -37,7 +37,7 @@ parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
 parser.add_argument('--epochs', type=int, default=25,
                     help='upper epoch limit')
-parser.add_argument('--batch_size', type=int, default=20, metavar='N',
+parser.add_argument('--batch_size', type=int, default=420, metavar='N',
                     help='batch size')
 parser.add_argument('--bptt', type=int, default=35,
                     help='sequence length')
@@ -114,7 +114,7 @@ def evaluate(model, data_source, ntokens, bptt, criterion, ppl=False):
         CE_loss = nn.CrossEntropyLoss().to(device)
     # ntokens = len(corpus.dictionary)
     # if config['model'] != 'Transformer':
-    eval_batch_size = 20
+    eval_batch_size = 420
     hidden = model.init_hidden(eval_batch_size)
     with torch.no_grad():
         for i in range(0, data_source.size(0) - 1, bptt):
@@ -135,7 +135,7 @@ def test(model, data_source, ntokens, bptt, criterion):
     CE_loss = nn.CrossEntropyLoss().to(device)
     # ntokens = len(corpus.dictionary)
     # if config['model'] != 'Transformer':
-    eval_batch_size = 20
+    eval_batch_size = 420
     hidden = model.init_hidden(eval_batch_size)
     with torch.no_grad():
         for i in range(0, data_source.size(0) - 1, bptt):
@@ -231,7 +231,8 @@ def HyperEvaluate(config):
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
     # wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'], reinit=True)
-    wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'] + "_ext", reinit=True)
+    # wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'] + "_ext", reinit=True)
+    wandb.init(project = "Critical-Gradients-EXT")
     wandb.run.name = run_id
 
     wandb.config.update(config)
@@ -275,6 +276,10 @@ def HyperEvaluate(config):
         optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                            topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
                            sampling=config['sampling'])
+    elif config['optim'] == 'Adam_FIFO':
+        optimizer = Adam_FIFO(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
+                           topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
+                           sampling=config['sampling'])
     elif config['optim'] == 'Adam_C_bottom':
         optimizer = Adam_C_bottom(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                                   topC=config['topC'], aggr=config['aggr'])
@@ -300,7 +305,6 @@ def HyperEvaluate(config):
 
         train_loss, offline_stats = train(model, train_data, optimizer, ntokens, args.bptt, args.clip, args.batch_size,
                                           criterion)
-        print("epoch done")
         off = offline_stats['no'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
         on = offline_stats['yes'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
         val_loss, val_ppl = test(model, val_data, ntokens, args.bptt, criterion)
@@ -337,35 +341,35 @@ def HyperEvaluate(config):
 PARAM_GRID0 = list(product(
     ['LSTM'],  # model
     [100, 101, 102, 103, 104],  # seeds
-    ['ptb', 'wikitext'],  # dataset
-    ['AggMo'],  # optimizer
+    ['ptb'],  # dataset
+    ['Adam'],  # optimizer
     [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
     [0],  # decay
     [0],  # topC
     ['none'],  # gradsum
     [0], # momentum
-    [0], #beta1
-    [0.], #beta2
-    [0] #alpha
+    [0.9], #beta1
+    [0.999], #beta2
+    [0], #alpha
+    ["KotH"] #sampling
 ))
 
 PARAM_GRID1 = list(product(
     ['LSTM'],  # model
     [100, 101, 102, 103, 104],  # seeds
     ['ptb', 'wikitext'],  # dataset
-    ['AggMo_C'],  # optimizer
+    ['SGDM_C'],  # optimizer
     [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
     [0.7, 0.9, 0.99],  # decay
     [5, 10, 20],  # topC
-    ['mean', 'sum'],  # gradsum
-    [0], # momentum
+    ['sum'],  # gradsum
+    [0.9, 0.99, 0.999], # momentum
     [0], #beta1
-    [0.], #beta2
-    [0] #alpha
+    [0], #beta2
+    [0]
 ))
 
-
-PARAM_GRID = PARAM_GRID0 + PARAM_GRID1
+PARAM_GRID = PARAM_GRID0
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -379,7 +383,7 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
 
     params = PARAM_GRID[param_ix]
 
-    m, s, d, o, l, dec, t, ch, p, b1, b2, a = params
+    m, s, d, o, l, dec, t, ch, p, b1, b2, a, sam = params
 
     config = {}
     config['model'] = m
@@ -389,10 +393,11 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     config['optim'] = o
     config['stats'] = False
     config['crit_test'] = True
-    config['sampling'] = None
+    config['sampling'] = sam
     config['kappa'] = 1.0
     config['layers'] = 1
-    if "_C" in o:
+    config['batchsize'] = 420
+    if "_C" in o or "_FIFO" in o:
         config['decay'] = dec
         config['aggr'] = ch
         config['topC'] = t

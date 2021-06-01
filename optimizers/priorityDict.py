@@ -167,9 +167,10 @@ class priority_dict(dict):
                 prob = min(1., -(torch.dot(val, av) / (val.norm() * av.norm()) - 1.))
                 if random.uniform(0, 1) <= prob:
                     self._heap.append(HeapItem(key, val))
-            elif self.sampling == "cos_diversity_not_backwards":
+            elif self.sampling == "cos_similarity":
                 av = self.gradmean()
-                prob = min(1., -(torch.dot(val, av) / (val.norm() * av.norm()) - 1.))
+                av = torch.flatten(av)
+                prob = 0.5*(torch.dot(torch.flatten(val), av) / (val.norm() * av.norm())+1)
                 if random.uniform(0, 1) <= prob:
                     self._heap.append(HeapItem(key, val))
             else:
