@@ -4,26 +4,20 @@ import os
 import sys
 from itertools import product
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 import wandb
-
-import matplotlib.pyplot as plt
-
-import pandas as pd
-import numpy as np
-
 from encoder_decoder import EncoderDecoder
 from models import ConvNetEncoder, ClassDecoder, LogisticRegression, FCLayer
 
 sys.path.append('..')
 from data_loader import load_data_subset
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import SAGA, SGD_FIFO, AggMo, SGD_C_new, AggMo_C, SGD_C_HIST
-
-os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
-os.environ["WANDB_MODE"] = "dryrun"
+from optimizers.optimExperimental import SAGA, AggMo, SGD_C_HIST
 
 # commandline arguments
 
@@ -135,10 +129,10 @@ def HyperEvaluate(config):
     torch.manual_seed(config['seed'])
 
     if config['optim'] == 'SAGA':
-        N_EPOCHS = 25            # number of epochs
+        N_EPOCHS = 25  # number of epochs
         BATCH_SIZE = 1
     else:
-        N_EPOCHS = 10           # number of epochs
+        N_EPOCHS = 10  # number of epochs
         BATCH_SIZE = args.batch_size
 
     if '_C' in config['optim']:
@@ -147,9 +141,7 @@ def HyperEvaluate(config):
     else:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
-    #wandb.init(project="Critical-Gradients-mnist-" + str(config['model']), reinit=True)
-    #wandb.init(project="Critical-Gradients-new-mnist-" + str(config['model']), reinit=True)
-    wandb.init(project="Critical-Gradients-comps-da", reinit=True)
+    wandb.init(project="Critical-Gradients-mnist-" + str(config['model']), reinit=True)
     wandb.run.name = run_id
 
     wandb.config.update(config)
@@ -191,12 +183,9 @@ def HyperEvaluate(config):
         elif config['optim'] == 'SGD_C':
             optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
                               aggr=config['aggr'])
-        elif config['optim'] == 'SGD_C_new':
-            optimizer = SGD_C_new(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
-                              aggr=config['aggr'])
         elif config['optim'] == 'SGD_C_HIST':
             optimizer = SGD_C_HIST(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
-                              aggr=config['aggr'])
+                                   aggr=config['aggr'])
         elif config['optim'] == 'SGDM_C':
             optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9, decay=config['decay'],
                               topC=config['topC'], aggr=config['aggr'])
@@ -211,7 +200,7 @@ def HyperEvaluate(config):
             optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                                   topC=config['topC'], aggr=config['aggr'])
         elif config['optim'] == 'SAGA':
-            optimizer = SAGA(model.parameters(), lr = config['lr'], n_samples = len(train_iterator.dataset))
+            optimizer = SAGA(model.parameters(), lr=config['lr'], n_samples=len(train_iterator.dataset))
         criterion = nn.CrossEntropyLoss().to(device)
 
     best_validation_perf = float('-inf')
@@ -264,11 +253,11 @@ def HyperEvaluate(config):
     return best_validation_perf, best_test_loss, best_test_perf
 
 
-PARAM_GRID0 = list(product(
+PARAM_GRID = list(product(
     ['LR', 'NeuralNet'],  # model
     [100, 101, 102, 103, 104],  # seeds
     ['mnist'],  # dataset
-    ['SGDM_C', 'SGD_C'],  # optimizer
+    ['SGD_C'],  # optimizer
     [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
     [0.7, 0.9, 0.99],  # decay
     [5, 10, 20],  # topC
@@ -277,23 +266,9 @@ PARAM_GRID0 = list(product(
     [False]  # Stats
 ))
 
-PARAM_GRID1 = list(product(
-    ['LR','NeuralNet'],  # model
-    [100, 101, 102, 103, 104],  # seeds
-    ['mnist'],  # dataset
-    ['AggMo', 'SGDM', 'SGD'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0],  # decay
-    [0],  # topC
-    ['none'],  # sum
-    [1.0],  # kappa
-    [False]  # Stats
-))
 
-PARAM_GRID = PARAM_GRID1 + PARAM_GRID0
-
-ages_at_removal = collections.defaultdict(lambda : collections.defaultdict(dict))
-ages_at_epoch_end = collections.defaultdict(lambda : collections.defaultdict(dict))
+ages_at_removal = collections.defaultdict(lambda: collections.defaultdict(dict))
+ages_at_epoch_end = collections.defaultdict(lambda: collections.defaultdict(dict))
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -330,6 +305,8 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     val_perf, test_loss, test_perf = HyperEvaluate(config)
     wandb.log({'Best Validation Accuracy': val_perf, 'Best Test Loss': test_loss, 'Best Test Accuracy': test_perf})
 
+# Code below is used to plot histograms, when used with SGD_C_HIST
+
 if bool(ages_at_removal):
     max_age = 0
     for model in ages_at_removal.keys():
@@ -342,7 +319,7 @@ if bool(ages_at_removal):
                     os.makedirs(HISTOGRAM_SAVE_PATH)
                 ages = ages_at_removal[model][topC][decay]
                 if max_age < max(ages):
-                    max_age=max(ages)
+                    max_age = max(ages)
                 to_plot.append(ages)
                 labels.append(str(decay))
             plt.rcParams.update({'font.size': 22})
@@ -353,7 +330,7 @@ if bool(ages_at_removal):
             plt.xlabel("Age (Steps)")
             plt.legend(loc='upper right')
             savename = os.path.join(HISTOGRAM_SAVE_PATH, 'Age_At_Removal.png')
-            plt.savefig(fname=savename, bbox_inches = 'tight', dpi=300)
+            plt.savefig(fname=savename, bbox_inches='tight', dpi=300)
             plt.clf()
 
 if bool(ages_at_epoch_end):
@@ -368,16 +345,16 @@ if bool(ages_at_epoch_end):
                     os.makedirs(HISTOGRAM_SAVE_PATH)
                 ages = ages_at_epoch_end[model][topC][decay]
                 if max_age < max(ages):
-                    max_age=max(ages)
+                    max_age = max(ages)
                 to_plot.append(ages)
                 labels.append(str(decay))
             plt.rcParams.update({'font.size': 22})
             plt.hist(to_plot, bins=np.arange(0, max_age, 2), label=labels)
             plt.yscale('linear')
-            plt.ylim(bottom = 0)
+            plt.ylim(bottom=0)
             plt.ylabel("Count")
             plt.xlabel("Age (Steps)")
             plt.legend(loc='upper right')
             savename = os.path.join(HISTOGRAM_SAVE_PATH, 'Age_At_Epoch_End.png')
-            plt.savefig(fname=savename, bbox_inches = 'tight', dpi=300)
+            plt.savefig(fname=savename, bbox_inches='tight', dpi=300)
             plt.clf()

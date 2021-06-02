@@ -13,6 +13,7 @@ GitPython          3.1.12
 idna               2.10
 importlib-metadata 3.4.0
 joblib             1.0.0
+matplotlib         3.3.4
 nltk               3.5
 numpy              1.19.1
 packaging          20.8
@@ -30,6 +31,7 @@ PyYAML             5.3.1
 regex              2019.11.1
 requests           2.25.1
 sacremoses         0.0.43
+scikit-learn       0.24.1
 sentencepiece      0.1.91
 sentry-sdk         0.19.5
 setuptools         51.3.3

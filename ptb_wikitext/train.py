@@ -2,6 +2,7 @@ import argparse
 import math
 import os
 import sys
+from itertools import product
 
 import torch
 import torch.nn as nn
@@ -9,14 +10,9 @@ import torch.onnx
 
 import wandb
 
-from itertools import product
-
 sys.path.append('..')
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import Adam_C_bottom, AggMo, AggMo_C, Adam_FIFO
-
-os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
-os.environ["WANDB_MODE"] = "dryrun"
+from optimizers.optimExperimental import AggMo
 
 # commandline arguments
 
@@ -112,9 +108,7 @@ def evaluate(model, data_source, ntokens, bptt, criterion, ppl=False):
     if ppl:
         total_CE_loss = 0.
         CE_loss = nn.CrossEntropyLoss().to(device)
-    # ntokens = len(corpus.dictionary)
-    # if config['model'] != 'Transformer':
-    eval_batch_size = 420
+    eval_batch_size = 20
     hidden = model.init_hidden(eval_batch_size)
     with torch.no_grad():
         for i in range(0, data_source.size(0) - 1, bptt):
@@ -133,9 +127,7 @@ def test(model, data_source, ntokens, bptt, criterion):
     total_loss = 0.
     total_CE_loss = 0.
     CE_loss = nn.CrossEntropyLoss().to(device)
-    # ntokens = len(corpus.dictionary)
-    # if config['model'] != 'Transformer':
-    eval_batch_size = 420
+    eval_batch_size = 20
     hidden = model.init_hidden(eval_batch_size)
     with torch.no_grad():
         for i in range(0, data_source.size(0) - 1, bptt):
@@ -157,9 +149,7 @@ def train(model, train_data, optimizer, ntokens, bptt, CLIP, batch_size, criteri
     # Turn on training mode which enables dropout.
     model.train()
     total_loss = 0.
-    # ntokens = len(corpus.dictionary)
     S = {'yes': 0, 'no': 0}
-    # if config['model'] != 'Transformer':
     hidden = model.init_hidden(batch_size)
     n_batches = len(train_data) // bptt
     for batch, i in enumerate(range(0, train_data.size(0) - 1, bptt)):
@@ -167,10 +157,6 @@ def train(model, train_data, optimizer, ntokens, bptt, CLIP, batch_size, criteri
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         model.zero_grad()
-        # if config['model'] == 'Transformer':
-        #     output = model(data)
-        #     output = output.view(-1, ntokens)
-        # else:
         hidden = repackage_hidden(hidden)
         output, hidden = model(data, hidden)
         loss = criterion(output, targets)
@@ -232,7 +218,7 @@ def HyperEvaluate(config):
 
     # wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'], reinit=True)
     # wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'] + "_ext", reinit=True)
-    wandb.init(project = "Critical-Gradients-EXT")
+    wandb.init(project="Critical-Gradients-EXT")
     wandb.run.name = run_id
 
     wandb.config.update(config)
@@ -276,13 +262,6 @@ def HyperEvaluate(config):
         optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                            topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
                            sampling=config['sampling'])
-    elif config['optim'] == 'Adam_FIFO':
-        optimizer = Adam_FIFO(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                           topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
-                           sampling=config['sampling'])
-    elif config['optim'] == 'Adam_C_bottom':
-        optimizer = Adam_C_bottom(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                                  topC=config['topC'], aggr=config['aggr'])
     elif config['optim'] == 'Adam':
         optimizer = Adam(model.parameters(), lr=config['lr'])
     elif config['optim'] == 'RMSprop':
@@ -291,9 +270,6 @@ def HyperEvaluate(config):
         optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                               topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
                               sampling=config['sampling'])
-    elif config['optim'] == 'AggMo_C':
-        optimizer = AggMo_C(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99], decay=config['decay'],
-                            topC=config['topC'], aggr=config['aggr'])
     elif config['optim'] == 'AggMo':
         optimizer = AggMo(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99])
 
@@ -337,39 +313,20 @@ def HyperEvaluate(config):
 
     return best_val_ppl, best_test_loss, best_test_ppl
 
-
-PARAM_GRID0 = list(product(
-    ['LSTM'],  # model
-    [100, 101, 102, 103, 104],  # seeds
-    ['ptb'],  # dataset
-    ['Adam'],  # optimizer
-    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
-    [0],  # decay
-    [0],  # topC
-    ['none'],  # gradsum
-    [0], # momentum
-    [0.9], #beta1
-    [0.999], #beta2
-    [0], #alpha
-    ["KotH"] #sampling
-))
-
-PARAM_GRID1 = list(product(
+PARAM_GRID = list(product(
     ['LSTM'],  # model
     [100, 101, 102, 103, 104],  # seeds
     ['ptb', 'wikitext'],  # dataset
-    ['SGDM_C'],  # optimizer
+    ['SGD_C'],  # optimizer
     [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
     [0.7, 0.9, 0.99],  # decay
     [5, 10, 20],  # topC
     ['sum'],  # gradsum
-    [0.9, 0.99, 0.999], # momentum
-    [0], #beta1
-    [0], #beta2
-    [0]
+    [0.9, 0.99, 0.999],  # momentum
+    [0],  # beta1
+    [0],  # beta2
+    [0] #alpha
 ))
-
-PARAM_GRID = PARAM_GRID0
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -383,7 +340,7 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
 
     params = PARAM_GRID[param_ix]
 
-    m, s, d, o, l, dec, t, ch, p, b1, b2, a, sam = params
+    m, s, d, o, l, dec, t, ch, p, b1, b2, a = params
 
     config = {}
     config['model'] = m
@@ -393,10 +350,9 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     config['optim'] = o
     config['stats'] = False
     config['crit_test'] = True
-    config['sampling'] = sam
+    config['sampling'] = 'KotH'
     config['kappa'] = 1.0
     config['layers'] = 1
-    config['batchsize'] = 420
     if "_C" in o or "_FIFO" in o:
         config['decay'] = dec
         config['aggr'] = ch
