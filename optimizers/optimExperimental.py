@@ -31,13 +31,7 @@ def aggregate(d_p, crit_buf, func, kappa=1.0):
 class SGD_FIFO(Optimizer):
     """
     Implementation of SGD (and optionally SGD with momentum) with critical gradients.
-    Replaces current-iteration gradient in conventional PyTorch implementation with
-    an aggregation of current gradient and critical gradients.
-
-    Conventional SGD or SGD with momentum can be recovered by setting kappa=0.
-
-    The critical-gradient-specific keyword parameters are tuned for good
-    off-the-shelf performance, though additional tuning may be required for best results
+    Uses a moving-window of length topC rather than selecting gradients based on norm
     """
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
@@ -161,13 +155,7 @@ class SGD_FIFO(Optimizer):
 class Adam_FIFO(Optimizer):
     """
     Implementation of Adam with critical gradients.
-    Replaces current-iteration gradient in conventional PyTorch implementation with
-    an aggregation of current gradient and critical gradients.
-
-    Conventional Adam can be recovered by setting kappa=0.
-
-    The critical-gradient-specific keyword parameters are tuned for good
-    off-the-shelf performance, though additional tuning may be required for best results
+    Uses a moving-window of length topC rather than selecting gradients based on norm
     """
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
@@ -320,13 +308,7 @@ class Adam_FIFO(Optimizer):
 class RMSprop_FIFO(Optimizer):
     """
     Implementation of RMSprop with critical gradients.
-    Replaces current-iteration gradient in conventional PyTorch implementation with
-    an aggregation of current gradient and critical gradients.
-
-    Conventional RMSprop can be recovered by setting kappa=0.
-
-    The critical-gradient-specific keyword parameters are tuned for good
-    off-the-shelf performance, though additional tuning may be required for best results
+    Uses a moving-window of length topC rather than selecting gradients based on norm
     """
 
     def __init__(self, params, lr=1e-2, alpha=0.99, eps=1e-8, weight_decay=0,
@@ -448,13 +430,7 @@ class RMSprop_FIFO(Optimizer):
 class SGD_C_bottom(Optimizer):
     """
     Implementation of SGD (and optionally SGD with momentum) with critical gradients.
-    Replaces current-iteration gradient in conventional PyTorch implementation with
-    an aggregation of current gradient and critical gradients.
-
-    Conventional SGD or SGD with momentum can be recovered by setting kappa=0.
-
-    The critical-gradient-specific keyword parameters are tuned for good
-    off-the-shelf performance, though additional tuning may be required for best results
+    Uses the inverse of norm as priority, turning conventional "topC" with "bottomC"
     """
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
@@ -579,13 +555,7 @@ class SGD_C_bottom(Optimizer):
 class Adam_C_bottom(Optimizer):
     """
     Implementation of Adam with critical gradients.
-    Replaces current-iteration gradient in conventional PyTorch implementation with
-    an aggregation of current gradient and critical gradients.
-
-    Conventional Adam can be recovered by setting kappa=0.
-
-    The critical-gradient-specific keyword parameters are tuned for good
-    off-the-shelf performance, though additional tuning may be required for best results
+    Uses the inverse of norm as priority, turning conventional "topC" with "bottomC"
     """
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
@@ -727,7 +697,9 @@ class Adam_C_bottom(Optimizer):
 
 
 class SAGA(Optimizer):
-    """Implement the SAGA optimization algorithm"""
+    """Implement the SAGA optimization algorithm
+    Original Paper: https://arxiv.org/pdf/1407.0202.pdf
+    """
 
     def __init__(self, params, n_samples, lr=0.001):
 
@@ -796,6 +768,9 @@ class SAGA(Optimizer):
 
 
 class SGD_new_momentum(Optimizer):
+    """
+    Running average (non-decaying) momentum. Never used.
+    """
 
     def __init__(self, params, lr=0.001, momentum=0, dampening=0,
                  weight_decay=0, nesterov=False):
@@ -873,6 +848,8 @@ class SGD_C_double(Optimizer):
     p(t+1) = p(t) + lr * (g_t + f(g_crit))
 
     Where f is either a sum or mean of the gradients in g_crit
+
+    Order of computing update step and updating buffer inverted, leading to double counting.
     """
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
@@ -971,6 +948,8 @@ class SGD_C_Only(Optimizer):
     gradients (top C gradients by norm). Replaces the gradient in conventional
     SGD with either the sum or the mean of critical gradients
 
+    Replaces the aggregated gradient with only the critical gradients e.g. the current
+    time step gradient may not come into play
     """
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
@@ -1075,24 +1054,17 @@ class SGD_C_Only(Optimizer):
 
 
 class Adam_C_double(Optimizer):
-    r"""Implements Adam algorithm.
-    It has been proposed in `Adam: A Method for Stochastic Optimization`_.
-    Arguments:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        lr (float, optional): learning rate (default: 1e-3)
-        betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its square (default: (0.9, 0.999))
-        eps (float, optional): term added to the denominator to improve
-            numerical stability (default: 1e-8)
-        weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
-        amsgrad (boolean, optional): whether to use the AMSGrad variant of this
-            algorithm from the paper `On the Convergence of Adam and Beyond`_
-            (default: False)
-    .. _Adam\: A Method for Stochastic Optimization:
-        https://arxiv.org/abs/1412.6980
-    .. _On the Convergence of Adam and Beyond:
-        https://openreview.net/forum?id=ryQu7f-RZ
+    r"""
+    Implementation of Adam with critical gradients.
+    Replaces current-iteration gradient in conventional PyTorch implementation with
+    an aggregation of current gradient and critical gradients.
+
+    Conventional Adam can be recovered by setting kappa=0.
+
+    The critical-gradient-specific keyword parameters are tuned for good
+    off-the-shelf performance, though additional tuning may be required for best results
+
+    Order of computing update step and updating buffer inverted, leading to double counting.
     """
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, decay=0.95, kappa=1.0, topC=10,
@@ -1209,27 +1181,16 @@ class Adam_C_double(Optimizer):
 
 
 class RMSprop_C_double(Optimizer):
-    r"""Implements RMSprop algorithm.
-    Proposed by G. Hinton in his
-    `course <https://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf>`_.
-    The centered version first appears in `Generating Sequences
-    With Recurrent Neural Networks <https://arxiv.org/pdf/1308.0850v5.pdf>`_.
-    The implementation here takes the square root of the gradient average before
-    adding epsilon (note that TensorFlow interchanges these two operations). The effective
-    learning rate is thus :math:`\alpha/(\sqrt{v} + \epsilon)` where :math:`\alpha`
-    is the scheduled learning rate and :math:`v` is the weighted moving average
-    of the squared gradient.
-    Args:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        lr (float, optional): learning rate (default: 1e-2)
-        momentum (float, optional): momentum factor (default: 0)
-        alpha (float, optional): smoothing constant (default: 0.99)
-        eps (float, optional): term added to the denominator to improve
-            numerical stability (default: 1e-8)
-        centered (bool, optional) : if ``True``, compute the centered RMSProp,
-            the gradient is normalized by an estimation of its variance
-        weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
+    r"""Implementation of RMSprop with critical gradients.
+    Replaces current-iteration gradient in conventional PyTorch implementation with
+    an aggregation of current gradient and critical gradients.
+
+    Conventional RMSprop can be recovered by setting kappa=0.
+
+    The critical-gradient-specific keyword parameters are tuned for good
+    off-the-shelf performance, though additional tuning may be required for best results
+
+    Order of computing update step and updating buffer inverted, leading to double counting.
     """
 
     def __init__(self, params, lr=1e-2, alpha=0.99, eps=1e-8, weight_decay=0, momentum=0, centered=False, decay=0.95,
@@ -1344,7 +1305,9 @@ class RMSprop_C_double(Optimizer):
 
 
 class AggMo_custom(Optimizer):
-    # Custom Implementation of the AggMo optimizer. Not used in favor of original version.
+    """
+    Custom Implementation of the AggMo optimizer. Not used in favor of original version.
+    """
 
     def __init__(self, params, lr=0.001, momenta=[], dampening=0,
                  weight_decay=0):
@@ -1416,6 +1379,8 @@ class SGD_C_HIST(Optimizer):
     Conventional SGD or SGD with momentum can be recovered by setting kappa=0.
     The critical-gradient-specific keyword parameters are tuned for good
     off-the-shelf performance, though additional tuning may be required for best results
+
+    This version of SGD_C is designed to maintain each gradient's age and can be used to generate histograms
     """
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
@@ -1461,7 +1426,7 @@ class SGD_C_HIST(Optimizer):
         return (self._age_at_removal, self._age_at_epoch_end)
 
     def epoch(self):
-        param_state = self.state[self.param_groups[0]['params'][0]] # This is gross AF but it works
+        param_state = self.state[self.param_groups[0]['params'][0]]  # This is gross but it works
         crit_buf = param_state['critical gradients']
         epoch_ages = crit_buf.epoch()
         for age in epoch_ages:
@@ -1547,126 +1512,6 @@ class SGD_C_HIST(Optimizer):
 
         return loss
 
-class SGD_C_new(Optimizer):
-    """
-    Implementation of SGD (and optionally SGD with momentum) with critical gradients.
-    Replaces current-iteration gradient in conventional PyTorch implementation with
-    an aggregation of current gradient and critical gradients.
-    Conventional SGD or SGD with momentum can be recovered by setting kappa=0.
-    The critical-gradient-specific keyword parameters are tuned for good
-    off-the-shelf performance, though additional tuning may be required for best results
-    """
-
-    def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
-                 weight_decay=0, momentum=0.,
-                 decay=0.7, topC=10, aggr='sum'):
-
-        if momentum < 0.0:
-            raise ValueError("Invalid momentum value: {}".format(momentum))
-        if weight_decay < 0.0:
-            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
-        if not 0.0 <= decay and not 1.0 > decay:
-            raise ValueError("Invalid alpha value: {}".format(decay))
-        if not 0.0 <= topC:
-            raise ValueError("Invalid alpha value: {}".format(topC))
-
-        defaults = dict(lr=lr, kappa=kappa, dampening=dampening,
-                        weight_decay=weight_decay, momentum=momentum,
-                        aggr=aggr, decay=decay, gradHist={}, topC=topC)
-
-        super(SGD_C_new, self).__init__(params, defaults)
-        self.resetOfflineStats()
-        self.resetAnalysis()
-
-    def getOfflineStats(self):
-        return self.offline_grad
-
-    def getAnalysis(self):
-        return self.g_analysis
-
-    def resetAnalysis(self):
-        self.g_analysis = {'gt': 0., 'gc': 0., 'count': 0}
-
-    def resetOfflineStats(self):
-        self.offline_grad = {'yes': 0, 'no': 0}
-
-    def __setstate__(self, state):
-        super(SGD_C_new, self).__setstate__(state)
-
-    def step(self, closure=None):
-        """Performs a single optimization step.
-        Arguments:
-            closure (callable, optional): A closure that reevaluates the model
-                and returns the loss.
-        """
-        loss = None
-        if closure is not None:
-            loss = closure()
-        for group in self.param_groups:
-            weight_decay = group['weight_decay']
-            kappa = group['kappa']
-            dampening = group['dampening']
-            decay = group['decay']
-            momentum = group['momentum']
-            topc = group['topC']
-            aggr = group['aggr']
-
-            total_norm = 0.0
-
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-                d_p = p.grad.data
-                total_norm += torch.sqrt(torch.sum(torch.square(d_p)))
-
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-                d_p = p.grad.data
-                if weight_decay != 0:
-                    d_p = d_p.add(weight_decay, p.data)
-                if kappa != 0:
-                    param_state = self.state[p]
-                    if 'critical gradients' not in param_state:
-                        crit_buf = param_state['critical gradients'] = priority_dict()
-                        crit_buf.sethyper(decay_rate=decay, K=topc)
-                        crit_buf[total_norm] = deepcopy(d_p)
-                    else:
-                        crit_buf = param_state['critical gradients']
-                        #
-                        aggr_grad = aggregate(d_p, crit_buf, aggr, kappa)
-                        if crit_buf.isFull():
-                            if total_norm > crit_buf.pokesmallest():
-                                self.offline_grad['yes'] += 1
-                                crit_buf[total_norm] = deepcopy(d_p)
-                            else:
-                                self.offline_grad['no'] += 1
-                        else:
-                            crit_buf[total_norm] = deepcopy(d_p)
-                        d_p = aggr_grad
-
-                    self.g_analysis['gc'] += crit_buf.averageTopC()
-                    self.g_analysis['count'] += 1
-                    self.g_analysis['gt'] += p.grad.data.norm()
-
-                    crit_buf.decay()
-
-                    if momentum != 0:
-                        param_state = self.state[p]
-                        if 'momentum_buffer' not in param_state:
-                            buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
-                        else:
-                            buf = param_state['momentum_buffer']
-                            buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
-                        # if nesterov:
-                        #     d_p = d_p.add(momentum, buf)
-                        # else:
-                        d_p = buf
-
-                p.data.add_(d_p, alpha=-group['lr'])
-
-        return loss
-
 
 class AggMo(Optimizer):
     r"""Implements Aggregated Momentum Gradient Descent
@@ -1749,10 +1594,13 @@ class AggMo(Optimizer):
 
 class AggMo_C(Optimizer):
     r"""Implements Aggregated Momentum Gradient Descent
+
+    Replaces AggMo's computation of several SGDM steps with SGDM_C steps
     """
 
-    def __init__(self, params, lr=0.1, betas=[0.0, 0.9, 0.99], weight_decay=0, dampening = 0.0, decay=0.7, topC=10, aggr='sum',
-                 sampling=None, critical_test=True, kappa = 1.0):
+    def __init__(self, params, lr=0.1, betas=[0.0, 0.9, 0.99], weight_decay=0, dampening=0.0, decay=0.7, topC=10,
+                 aggr='sum',
+                 sampling=None, critical_test=True, kappa=1.0):
 
         if any(momentum < 0.0 for momentum in betas):
             raise ValueError("Invalid beta value!")
@@ -1763,7 +1611,7 @@ class AggMo_C(Optimizer):
         if not 0.0 <= topC:
             raise ValueError("Invalid alpha value: {}".format(topC))
 
-        defaults = dict(lr=lr, weight_decay=weight_decay, betas=betas, kappa = kappa, dampening=dampening,
+        defaults = dict(lr=lr, weight_decay=weight_decay, betas=betas, kappa=kappa, dampening=dampening,
                         aggr=aggr, decay=decay, gradHist={}, topC=topC, sampling=sampling, critical_test=critical_test)
 
         super(AggMo_C, self).__init__(params, defaults)

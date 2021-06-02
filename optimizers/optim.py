@@ -177,7 +177,7 @@ class SGD_C(Optimizer):
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
                  weight_decay=0, momentum=0.,
-                 decay=0.7, topC=10, aggr='sum', sampling=None, critical_test=True, synced = True):
+                 decay=0.7, topC=10, aggr='sum', sampling=None, critical_test=True, synced=True):
 
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -190,7 +190,7 @@ class SGD_C(Optimizer):
 
         defaults = dict(lr=lr, kappa=kappa, dampening=dampening,
                         weight_decay=weight_decay, momentum=momentum, aggr=aggr, decay=decay, gradHist={}, topC=topC,
-                        sampling=sampling, critical_test=critical_test, synced = synced)
+                        sampling=sampling, critical_test=critical_test, synced=synced)
 
         super(SGD_C, self).__init__(params, defaults)
         self.resetOfflineStats()
@@ -435,7 +435,7 @@ class Adam_C(Optimizer):
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
                  decay=0.7, kappa=1.0, topC=10,
-                 weight_decay=0, amsgrad=False, aggr='mean', sampling=None, critical_test=True, synced = True):
+                 weight_decay=0, amsgrad=False, aggr='mean', sampling=None, critical_test=True, synced=True):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -450,7 +450,8 @@ class Adam_C(Optimizer):
             raise ValueError("Invalid alpha value: {}".format(topC))
         defaults = dict(lr=lr, betas=betas, eps=eps,
                         weight_decay=weight_decay, aggr=aggr, amsgrad=amsgrad,
-                        kappa=kappa, topC=topC, decay=decay, sampling=sampling, critical_test=critical_test, synced = synced)
+                        kappa=kappa, topC=topC, decay=decay, sampling=sampling, critical_test=critical_test,
+                        synced=synced)
 
         super(Adam_C, self).__init__(params, defaults)
         self.resetOfflineStats()
@@ -713,7 +714,7 @@ class RMSprop_C(Optimizer):
 
     def __init__(self, params, lr=1e-2, alpha=0.99, eps=1e-8, weight_decay=0,
                  momentum=0, centered=False, decay=0.7, kappa=1.0,
-                 topC=10, aggr='mean', sampling=None, critical_test=True, synced = True):
+                 topC=10, aggr='mean', sampling=None, critical_test=True, synced=True):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -729,7 +730,7 @@ class RMSprop_C(Optimizer):
 
         defaults = dict(lr=lr, momentum=momentum, alpha=alpha, eps=eps,
                         centered=centered, weight_decay=weight_decay,
-                        aggr=aggr, kappa=kappa, topC=topC, decay=decay, synced = synced)
+                        aggr=aggr, kappa=kappa, topC=topC, decay=decay, synced=synced)
         super(RMSprop_C, self).__init__(params, defaults)
         self.resetOfflineStats()
 

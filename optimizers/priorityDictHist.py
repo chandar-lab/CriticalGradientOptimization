@@ -28,14 +28,8 @@ class HeapItem:
 
 class priority_dict(dict):
     """Dictionary that can be used as a priority queue.
-    Keys of the dictionary are items to be put into the queue, and values
-    are their respective priorities. All dictionary methods work as expected.
-    The advantage over a standard heapq-based priority queue is
-    that priorities of items can be efficiently updated (amortized O(1))
-    using code as 'thedict[item] = new_priority.'
-    The 'smallest' method can be used to return the object with lowest
-    priority, and 'pop_smallest' also removes it.
-    The 'sorted_iter' method provides a destructive sorted iterator.
+    This class can be used in conjunction with SGD_C_HIST to keep a history of gradient ages to generate histograms.
+    Reimplemented to avoid conflicts with other optimizers.
     """
 
     def __init__(self, *args, **kwargs):

@@ -1,25 +1,20 @@
-from model.convnets import CIFAR10CNNModel, CIFAR100CNNModel, CIFAR100CNNModel_noDropOut
-
-import torch.optim as optim
-
-import sys
-import torch
-import torch.nn as nn
 import argparse
 import os
-import wandb
-
+import sys
 from itertools import product
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
 import model.cifar as models
+import wandb
+from model.convnets import CIFAR10CNNModel, CIFAR100CNNModel, CIFAR100CNNModel_noDropOut
 
 sys.path.append('..')
 from data_loader import load_data_subset
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import Adam_C_bottom, SGD_C_bottom, AggMo, SGD_C_new, AggMo_C
-
-os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
-os.environ["WANDB_MODE"] = "dryrun"
+from optimizers.optimExperimental import AggMo_C
 
 # commandline arguments
 
@@ -130,9 +125,7 @@ def HyperEvaluate(config):
     else:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
-    #wandb.init(project="Critical-Gradients-" + config['dataset'], reinit=True)
-    wandb.init(project="Critical-Gradients-" + config['dataset'] + "_ext", reinit=True)
-    #wandb.init(project="Critical-Gradients-EXT", reinit=True)
+    wandb.init(project="Critical-Gradients-" + config['dataset'], reinit=True)
     wandb.run.name = run_id
 
     wandb.config.update(config)
@@ -188,32 +181,22 @@ def HyperEvaluate(config):
     elif config['optim'] == 'SGD_C':
         optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
                           aggr=config['aggr'], critical_test=config['crit_test'], sampling=config['sampling'])
-    elif config['optim'] == 'SGD_C_bottom':
-        optimizer = SGD_C_bottom(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
-                          aggr=config['aggr'], critical_test=config['crit_test'], sampling=config['sampling'])
-
     elif config['optim'] == 'SGDM_C':
-        optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=config['momentum'], decay=config['decay'], topC=config['topC'],
-                          aggr=config['aggr'], critical_test=config['crit_test'],
+        optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=config['momentum'], decay=config['decay'],
+                          topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
                           sampling=config['sampling'])
     elif config['optim'] == 'Adam_C':
         optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                            topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
-                           sampling=config['sampling'], betas = (config['beta1'], config['beta2']))
-    elif config['optim'] == 'Adam_C_bottom':
-        optimizer = Adam_C_bottom(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                                  topC=config['topC'], aggr=config['aggr'])
+                           sampling=config['sampling'], betas=(config['beta1'], config['beta2']))
     elif config['optim'] == 'Adam':
-        optimizer = Adam(model.parameters(), lr=config['lr'], betas = (config['beta1'], config['beta2']))
+        optimizer = Adam(model.parameters(), lr=config['lr'], betas=(config['beta1'], config['beta2']))
     elif config['optim'] == 'RMSprop':
         optimizer = RMSprop(model.parameters(), lr=config['lr'], alpha=config['alpha'])
     elif config['optim'] == 'RMSprop_C':
         optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                               topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
                               sampling=config['sampling'], alpha=config['alpha'])
-    elif config['optim'] == 'SGD_C_new':
-            optimizer = SGD_C_new(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
-                              aggr=config['aggr'])
     elif config['optim'] == 'AggMo_C':
         optimizer = AggMo_C(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99], decay=config['decay'],
                             topC=config['topC'], aggr=config['aggr'])
@@ -266,18 +249,16 @@ PARAM_GRID = list(product(
     ['convnet'],  # model
     [100, 101, 102, 103, 104],  # seeds
     ['cifar10', 'cifar100'],  # dataset
-    ['AggMo_C'],  # optimizer
+    ['SGD_C'],  # optimizer
     [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
     [0.7, 0.9, 0.99],  # decay
     [5, 10, 20],  # topC
     ['sum'],  # gradsum
-    [0], # momentum
-    [0], #beta1
-    [0.], #beta2
+    [0.9, 0.99, 0.999],  # momentum
+    [0],  # beta1
+    [0],  # beta2
     [0] #alpha
 ))
-
-
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -301,9 +282,9 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     config['optim'] = o
     config['stats'] = False
     config['crit_test'] = True
-    config['sampling'] = None
+    config['sampling'] = 'KotH'
     config['kappa'] = 1.0
-    if "_C" in o:
+    if "_C" in o or "FIFO" in o:
         config['decay'] = dec
         config['aggr'] = ch
         config['topC'] = t

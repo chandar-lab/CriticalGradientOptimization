@@ -1,27 +1,23 @@
 import argparse
+import collections
 import os
 import sys
 from itertools import product
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 import wandb
-
-import matplotlib.pyplot as plt
-
-import pandas as pd
-
 from encoder_decoder import EncoderDecoder
 from models import ConvNetEncoder, ClassDecoder, LogisticRegression, FCLayer
 
 sys.path.append('..')
 from data_loader import load_data_subset
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import SAGA, SGD_FIFO, AggMo, SGD_C_new, AggMo_original, AggMo_C, SGD_C_HIST
-
-#os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
-#os.environ["WANDB_MODE"] = "dryrun"
+from optimizers.optimExperimental import SAGA, AggMo, SGD_C_HIST
 
 # commandline arguments
 
@@ -133,10 +129,10 @@ def HyperEvaluate(config):
     torch.manual_seed(config['seed'])
 
     if config['optim'] == 'SAGA':
-        N_EPOCHS = 25            # number of epochs
+        N_EPOCHS = 25  # number of epochs
         BATCH_SIZE = 1
     else:
-        N_EPOCHS = 25           # number of epochs
+        N_EPOCHS = 10  # number of epochs
         BATCH_SIZE = args.batch_size
 
     if '_C' in config['optim']:
@@ -145,8 +141,7 @@ def HyperEvaluate(config):
     else:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
-    #wandb.init(project="Critical-Gradients-mnist-" + str(config['model']), reinit=True)
-    wandb.init(project="Critical-Gradients-new-mnist-" + str(config['model']), reinit=True)
+    wandb.init(project="Critical-Gradients-mnist-" + str(config['model']), reinit=True)
     wandb.run.name = run_id
 
     wandb.config.update(config)
@@ -156,14 +151,7 @@ def HyperEvaluate(config):
     if not os.path.exists(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
 
-    if "HIST" in config['optim']:
-        HISTOGRAM_SAVE_PATH = os.path.join('./Histograms', config['dataset'], config['model'] + '_' + config['optim'],
-                                       'Model',
-                                       run_id)
-        if not os.path.exists(HISTOGRAM_SAVE_PATH):
-            os.makedirs(HISTOGRAM_SAVE_PATH)
-
-    train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(data_aug=0, batch_size=BATCH_SIZE,
+    train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(data_aug=1, batch_size=BATCH_SIZE,
                                                                                      workers=0, dataset='mnist',
                                                                                      data_target_dir=data_path,
                                                                                      labels_per_class=5000,
@@ -191,18 +179,13 @@ def HyperEvaluate(config):
         elif config['optim'] == 'SGDM':
             optimizer = SGD(model.parameters(), lr=config['lr'], momentum=0.9)
         elif config['optim'] == 'AggMo':
-            optimizer = AggMo(model.parameters(), lr=config['lr'], momenta=[0, 0.9, 0.99])
-        elif config['optim'] == 'AggMo_original':
-            optimizer = AggMo_original(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99])
+            optimizer = AggMo(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99])
         elif config['optim'] == 'SGD_C':
             optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
                               aggr=config['aggr'])
-        elif config['optim'] == 'SGD_C_new':
-            optimizer = SGD_C_new(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
-                              aggr=config['aggr'])
         elif config['optim'] == 'SGD_C_HIST':
             optimizer = SGD_C_HIST(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
-                              aggr=config['aggr'])
+                                   aggr=config['aggr'])
         elif config['optim'] == 'SGDM_C':
             optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9, decay=config['decay'],
                               topC=config['topC'], aggr=config['aggr'])
@@ -217,7 +200,7 @@ def HyperEvaluate(config):
             optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
                                   topC=config['topC'], aggr=config['aggr'])
         elif config['optim'] == 'SAGA':
-            optimizer = SAGA(model.parameters(), lr = config['lr'], n_samples = len(train_iterator.dataset))
+            optimizer = SAGA(model.parameters(), lr=config['lr'], n_samples=len(train_iterator.dataset))
         criterion = nn.CrossEntropyLoss().to(device)
 
     best_validation_perf = float('-inf')
@@ -258,26 +241,24 @@ def HyperEvaluate(config):
 
     if "HIST" in config["optim"]:
         age_at_removal, age_at_epoch_end = optimizer.get_ages()
-        n_bins = min(10, max(age_at_removal)-min(age_at_removal))
-        plt.hist(age_at_removal, bins = n_bins)
-        savename = os.path.join(HISTOGRAM_SAVE_PATH, 'Age_At_Removal.png')
-        plt.savefig(fname=savename)
-        plt.clf()
-        n_bins = min(10, max(age_at_epoch_end)-min(age_at_epoch_end))
-        plt.hist(age_at_epoch_end, bins=n_bins)
-        savename = os.path.join(HISTOGRAM_SAVE_PATH, 'Age_At_Epoch_End.png')
-        plt.savefig(fname=savename)
-        plt.clf()
+        try:
+            ages_at_removal[config['model']][config['topC']][config['decay']] += age_at_removal
+        except KeyError:
+            ages_at_removal[config['model']][config['topC']][config['decay']] = age_at_removal
+        try:
+            ages_at_epoch_end[config['model']][config['topC']][config['decay']] += age_at_epoch_end
+        except KeyError:
+            ages_at_epoch_end[config['model']][config['topC']][config['decay']] = age_at_epoch_end
 
     return best_validation_perf, best_test_loss, best_test_perf
 
 
 PARAM_GRID = list(product(
     ['LR', 'NeuralNet'],  # model
-    [100], # , 101, 102, 103, 104],  # seeds
+    [100, 101, 102, 103, 104],  # seeds
     ['mnist'],  # dataset
-    ['SGD_C_HIST'],  # optimizer
-    [0.01],  # lr
+    ['SGD_C'],  # optimizer
+    [0.1, 0.01, 0.001, 0.0001, 0.00001],  # lr
     [0.7, 0.9, 0.99],  # decay
     [5, 10, 20],  # topC
     ['sum'],  # sum
@@ -285,6 +266,9 @@ PARAM_GRID = list(product(
     [False]  # Stats
 ))
 
+
+ages_at_removal = collections.defaultdict(lambda: collections.defaultdict(dict))
+ages_at_epoch_end = collections.defaultdict(lambda: collections.defaultdict(dict))
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -321,20 +305,56 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     val_perf, test_loss, test_perf = HyperEvaluate(config)
     wandb.log({'Best Validation Accuracy': val_perf, 'Best Test Loss': test_loss, 'Best Test Accuracy': test_perf})
 
-# total number of slurm workers detected
-# defaults to 1 if not running under SLURM
-N_WORKERS = int(os.getenv('SLURM_ARRAY_TASK_COUNT', 1))
+# Code below is used to plot histograms, when used with SGD_C_HIST
 
-# this worker's array index. Assumes slurm array job is zero-indexed
-# defaults to zero if not running under SLURM
-this_worker = int(os.getenv('SLURM_ARRAY_TASK_ID', 0))
+if bool(ages_at_removal):
+    max_age = 0
+    for model in ages_at_removal.keys():
+        for topC in ages_at_removal[model].keys():
+            to_plot = []
+            labels = []
+            for decay in ages_at_removal[model][topC].keys():
+                HISTOGRAM_SAVE_PATH = os.path.join('./Histograms', 'mnist', model, "Decay_Sweeps", "topC_" + str(topC))
+                if not os.path.exists(HISTOGRAM_SAVE_PATH):
+                    os.makedirs(HISTOGRAM_SAVE_PATH)
+                ages = ages_at_removal[model][topC][decay]
+                if max_age < max(ages):
+                    max_age = max(ages)
+                to_plot.append(ages)
+                labels.append(str(decay))
+            plt.rcParams.update({'font.size': 22})
+            plt.hist(to_plot, bins=np.arange(0, max_age, 5), label=labels)
+            plt.yscale('log', nonposy='clip')
+            plt.ylim(bottom=1)
+            plt.ylabel("Count (Log)")
+            plt.xlabel("Age (Steps)")
+            plt.legend(loc='upper right')
+            savename = os.path.join(HISTOGRAM_SAVE_PATH, 'Age_At_Removal.png')
+            plt.savefig(fname=savename, bbox_inches='tight', dpi=300)
+            plt.clf()
 
-df = pd.read_csv('SGD_C_to_run.csv')
-params = df.to_dict(orient='records')
-
-for param_ix in range(this_worker, len(df), N_WORKERS):
-
-    config = params[param_ix]
-
-    val_ppl, test_loss, test_ppl = HyperEvaluate(config)
-    wandb.log({'Best Validation Accuracy': val_ppl, 'Best Test Loss': test_loss, 'Best Test Accuracy': test_ppl})
+if bool(ages_at_epoch_end):
+    max_age = 0
+    for model in ages_at_epoch_end.keys():
+        for topC in ages_at_epoch_end[model].keys():
+            to_plot = []
+            labels = []
+            for decay in ages_at_epoch_end[model][topC].keys():
+                HISTOGRAM_SAVE_PATH = os.path.join('./Histograms', 'mnist', model, "Decay_Sweeps", "topC_" + str(topC))
+                if not os.path.exists(HISTOGRAM_SAVE_PATH):
+                    os.makedirs(HISTOGRAM_SAVE_PATH)
+                ages = ages_at_epoch_end[model][topC][decay]
+                if max_age < max(ages):
+                    max_age = max(ages)
+                to_plot.append(ages)
+                labels.append(str(decay))
+            plt.rcParams.update({'font.size': 22})
+            plt.hist(to_plot, bins=np.arange(0, max_age, 2), label=labels)
+            plt.yscale('linear')
+            plt.ylim(bottom=0)
+            plt.ylabel("Count")
+            plt.xlabel("Age (Steps)")
+            plt.legend(loc='upper right')
+            savename = os.path.join(HISTOGRAM_SAVE_PATH, 'Age_At_Epoch_End.png')
+            plt.savefig(fname=savename, bbox_inches='tight', dpi=300)
+            plt.clf()
