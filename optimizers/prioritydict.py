@@ -6,6 +6,20 @@ from copy import deepcopy
 random.seed(100)
 
 
+class Gradient:
+    def __init__(self, g):
+        self.g = g
+        self.age = 0
+        self.epoch_age = 0
+
+    def step(self):
+        self.age += 1
+        self.epoch_age += 1
+
+    def resetEpoch(self):
+        self.epoch_age = 0
+
+
 class HeapItem:
     def __init__(self, p, t):
         self.p = p
@@ -15,7 +29,7 @@ class HeapItem:
         return self.p < other.p
 
 
-class priority_dict(dict):
+class priorityDict(dict):
     """Dictionary that can be used as a priority queue.
 
     Keys of the dictionary are items to be put into the queue, and values
@@ -28,10 +42,13 @@ class priority_dict(dict):
     priority, and 'pop_smallest' also removes it.
 
     The 'sorted_iter' method provides a destructive sorted iterator.
+
+    This class can be used in conjunction with SGD_C_HIST to keep a history of gradient ages to generate histograms.
+    Reimplemented to avoid conflicts with other optimizers by setting hist=true.
     """
 
     def __init__(self, *args, **kwargs):
-        super(priority_dict, self).__init__(*args, **kwargs)
+        super(priorityDict, self).__init__(*args, **kwargs)
         self._heap = [HeapItem(k, v) for k, v in self.items()]
         self._rebuild_heap()
 
@@ -41,10 +58,11 @@ class priority_dict(dict):
     def size(self):
         return len(self._heap)
 
-    def sethyper(self, decay_rate=0.5, K=5, sampling=None):
+    def setHyper(self, decay_rate=0.5, K=5, sampling='KotH', hist=False):
         self.k = K
         self.decay_rate = decay_rate
         self.sampling = sampling
+        self.hist = hist
 
     def _reorder(self):
         self._heap = deepcopy(self._heap[-self.k:])
@@ -79,23 +97,30 @@ class priority_dict(dict):
             ave = sum([it.t.norm() for it in self._heap]) / float(len(self._heap))
         return ave
 
-    def pokesmallest(self):
+    def pokeSmallest(self):
         """Return the lowest priority.
-
         Raises IndexError if the object is empty.
         """
 
         it = self._heap[0]
         return it.p
 
-    def getmin(self):
+    def pokesmallest_age(self):
+        """Return the lowest priority.
+        Raises IndexError if the object is empty.
+        """
+
+        it = self._heap[0]
+        return it.t.age
+
+    def getMin(self):
         """
         Get smallest gradient
         :return: The smallest gradient
         """
         return self._heap[0].t
 
-    def getmax(self):
+    def getMax(self):
         "Returns the largest gradient"
         max = self._heap[0]
         for it in self._heap[1:]:
@@ -103,29 +128,39 @@ class priority_dict(dict):
                 max = it
         return max.t
 
-    def getmedian(self):
+    def getMedian(self):
         "Returns the median gradient"
         sorted_list = sorted(self._heap, key=lambda x: x.p)
         return sorted_list[len(self._heap) // 2].t
 
-    def gradmean(self):
+    def gradMean(self):
         """Return the mean of top k gradients
         """
-
-        mean = torch.clone(self._heap[0].t)
-        cnt = 1.
-        for it in self._heap[1:]:
-            mean.add_(it.t)
-            cnt += 1.
+        if not self.hist:
+            mean = torch.clone(self._heap[0].t)
+            cnt = 1.
+            for it in self._heap[1:]:
+                mean.add_(it.t)
+                cnt += 1.
+        else:
+            mean = torch.clone(self._heap[0].t.g)
+            cnt = 1.
+            for it in self._heap[1:]:
+                mean.add_(it.t.g)
+                cnt += 1.
         return mean.div_(cnt)
 
-    def gradsum(self):
+    def gradSum(self):
         """Return the sum of top k gradients
         """
-
-        sum = torch.clone(self._heap[0].t)
-        for it in self._heap[1:]:
-            sum.add_(it.t)
+        if not self.hist:
+            sum = torch.clone(self._heap[0].t)
+            for it in self._heap[1:]:
+                sum.add_(it.t)
+        else:
+            sum = torch.clone(self._heap[0].t.g)
+            for it in self._heap[1:]:
+                sum.add_(it.t.g)
         return sum
 
     def __getitem__(self, key):
@@ -152,25 +187,25 @@ class priority_dict(dict):
                 self._heap.remove(item)
                 self._heap.append(HeapItem(key, val))
             elif self.sampling == "mean_diversity":
-                av = self.gradmean()
+                av = self.gradMean()
                 prob = min(1., (torch.sub(av, val).norm()) / av.norm())
                 if random.uniform(0, 1) <= prob:
                     self._heap.append(HeapItem(key, val))
             elif self.sampling == "cos_diversity":
-                av = torch.flatten(self.gradmean())
+                av = torch.flatten(self.gradMean())
                 flat = torch.flatten(val)
                 prob = (torch.dot(flat, av) / (flat.norm() * av.norm()) - 1.) * -0.5
                 if random.uniform(0, 1) <= prob:
                     self._heap.append(HeapItem(key, val))
             elif self.sampling == "cos_diversity_keep_backwards":
-                av = self.gradmean()
+                av = self.gradMean()
                 prob = min(1., -(torch.dot(val, av) / (val.norm() * av.norm()) - 1.))
                 if random.uniform(0, 1) <= prob:
                     self._heap.append(HeapItem(key, val))
             elif self.sampling == "cos_similarity":
-                av = self.gradmean()
+                av = self.gradMean()
                 av = torch.flatten(av)
-                prob = 0.5*(torch.dot(torch.flatten(val), av) / (val.norm() * av.norm())+1)
+                prob = 0.5 * (torch.dot(torch.flatten(val), av) / (val.norm() * av.norm()) + 1)
                 if random.uniform(0, 1) <= prob:
                     self._heap.append(HeapItem(key, val))
             else:
@@ -195,7 +230,7 @@ class priority_dict(dict):
         # http://mail.python.org/pipermail/python-ideas/2007-May/000744.html
         # We just rebuild the heap from scratch after passing to super.
 
-        super(priority_dict, self).update(*args, **kwargs)
+        super(priorityDict, self).update(*args, **kwargs)
         self._rebuild_heap()
 
     def sorted_iter(self):
@@ -206,3 +241,19 @@ class priority_dict(dict):
 
         while self:
             yield self.pop_smallest()
+
+    def step(self):
+        for item in self._heap: item.t.step()
+
+    def epoch(self):
+        ages = []
+        for item in self._heap:
+            ages.append(item.t.epoch_age)
+            item.t.resetEpoch()
+        return ages
+
+    def averageTopC(self):
+        ave = 0.
+        if len(self._heap) > 0:
+            ave = sum([it.t.g.norm() for it in self._heap]) / float(len(self._heap))
+        return ave

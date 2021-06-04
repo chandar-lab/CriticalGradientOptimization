@@ -3,7 +3,7 @@ import torch
 from .losses import *
 
 from optimizers.optim import SGD, Adam, SGD_C, Adam_C, RMSprop, RMSprop_C
-from optimizers.optimExperimental import SAGA
+from optimizers.optim_experimental import SAGA
 from torch.autograd import Variable
 
 

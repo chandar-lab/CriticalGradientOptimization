@@ -14,10 +14,10 @@ import wandb
 from encoder_decoder import EncoderDecoder
 from models import ConvNetEncoder, ClassDecoder, LogisticRegression, FCLayer
 
-sys.path.append('..')
+sys.path.append('../..')
 from data_loader import load_data_subset
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import SAGA, AggMo, SGD_C_HIST
+from optimizers.optim_experimental import SAGA, AggMo, SGD_C_HIST
 
 # commandline arguments
 
@@ -146,7 +146,7 @@ def HyperEvaluate(config):
 
     wandb.config.update(config)
 
-    MODEL_SAVE_PATH = os.path.join('../Results', config['dataset'], config['model'] + '_' + config['optim'], 'Model',
+    MODEL_SAVE_PATH = os.path.join('../../Results', config['dataset'], config['model'] + '_' + config['optim'], 'Model',
                                    run_id)
     if not os.path.exists(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
@@ -314,7 +314,7 @@ if bool(ages_at_removal):
             to_plot = []
             labels = []
             for decay in ages_at_removal[model][topC].keys():
-                HISTOGRAM_SAVE_PATH = os.path.join('./Histograms', 'mnist', model, "Decay_Sweeps", "topC_" + str(topC))
+                HISTOGRAM_SAVE_PATH = os.path.join('../../mnist/Histograms', 'mnist', model, "Decay_Sweeps", "topC_" + str(topC))
                 if not os.path.exists(HISTOGRAM_SAVE_PATH):
                     os.makedirs(HISTOGRAM_SAVE_PATH)
                 ages = ages_at_removal[model][topC][decay]
@@ -340,7 +340,7 @@ if bool(ages_at_epoch_end):
             to_plot = []
             labels = []
             for decay in ages_at_epoch_end[model][topC].keys():
-                HISTOGRAM_SAVE_PATH = os.path.join('./Histograms', 'mnist', model, "Decay_Sweeps", "topC_" + str(topC))
+                HISTOGRAM_SAVE_PATH = os.path.join('../../mnist/Histograms', 'mnist', model, "Decay_Sweeps", "topC_" + str(topC))
                 if not os.path.exists(HISTOGRAM_SAVE_PATH):
                     os.makedirs(HISTOGRAM_SAVE_PATH)
                 ages = ages_at_epoch_end[model][topC][decay]

@@ -1,21 +1,17 @@
 # -*- coding: utf-8 -*-
-import copy
 import json
 import os
 import re
 import shutil
-import urllib
 from collections import OrderedDict
-from io import BytesIO
 from zipfile import ZipFile
 from tqdm import tqdm
 
 import numpy as np
 
-from utils import dbPointer
-from utils import delexicalize
+from experiments.multiwoz_lstm.utils import dbPointer, delexicalize
 
-from utils.nlp import normalize
+from experiments.multiwoz_lstm.utils import normalize
 
 
 np.set_printoptions(precision=3)

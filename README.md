@@ -40,7 +40,7 @@ Models and training scripts are segmented by architecture and/or dataset.
 
 To run code from the home folder,
 ```
-python <director>/train.py --data_path <data-directory> --results_path <wandb-result-directory>
+python experiments/<directory>/train.py --data_path <data-directory> --results_path <wandb-result-directory>
 ```
 
 The `--data_path` and `--results_path` arguments are optional, and will use default locations if not specified. Additional arguments can be passed to affect the model/training. These are dependent on the dataset/model.

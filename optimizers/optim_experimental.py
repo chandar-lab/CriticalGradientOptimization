@@ -1,9 +1,10 @@
 import math
+from copy import deepcopy
+
 import torch
 from torch.optim import Optimizer
-from .priorityDict import priority_dict
-from .priorityDictHist import priority_dict as priority_dict_hist
-from copy import deepcopy
+
+from .prioritydict import priorityDict
 
 """
 Collection of Experimental optimizers developed during our research. Included for completeness.
@@ -13,15 +14,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def aggregate(d_p, crit_buf, func, kappa=1.0):
     if "sum" in func:
-        crit_buf_ = crit_buf.gradmean()
+        crit_buf_ = crit_buf.gradMean()
         crit_buf_.mul_(kappa)
         return torch.add(d_p, crit_buf_)
     elif "mid" in func:
-        crit_buf_ = crit_buf.gradmean()
+        crit_buf_ = crit_buf.gradMean()
         crit_buf_.mul_(kappa)
         return torch.mul(torch.add(d_p, crit_buf_), 0.5)
     elif "mean" in func:
-        crit_buf_ = crit_buf.gradsum()
+        crit_buf_ = crit_buf.gradSum()
         crit_buf_.mul_(kappa)
         return torch.div(torch.add(d_p, crit_buf_), crit_buf.size() + 1)
     else:
@@ -103,15 +104,15 @@ class SGD_FIFO(Optimizer):
                 if kappa != 0:
                     param_state = self.state[p]
                     if 'critical gradients' not in param_state:
-                        crit_buf = param_state['critical gradients'] = priority_dict()
-                        crit_buf.sethyper(decay_rate=decay, K=topc, sampling=sampling)
+                        crit_buf = param_state['critical gradients'] = priorityDict()
+                        crit_buf.setHyper(decay_rate=decay, K=topc, sampling=sampling)
                         crit_buf[d_p_norm] = deepcopy(d_p)
                     else:
                         crit_buf = param_state['critical gradients']
                         aggr_grad = aggregate(d_p, crit_buf, aggr, kappa)
                         if crit_buf.isFull():
                             if critical_test:
-                                if d_p_norm > crit_buf.pokesmallest():
+                                if d_p_norm > crit_buf.pokeSmallest():
                                     self.offline_grad['yes'] += 1
                                     crit_buf[d_p_norm] = deepcopy(d_p)
                                 else:
@@ -127,11 +128,11 @@ class SGD_FIFO(Optimizer):
                     self.g_analysis['count'] += 1
                     self.g_analysis['gt'] += p.grad.data.norm()
                     if 'mid' in aggr:
-                        self.g_analysis['gc_aggr'] += crit_buf.getmin().norm()
+                        self.g_analysis['gc_aggr'] += crit_buf.getMin().norm()
                     elif 'median' in aggr:
-                        self.g_analysis['gc_aggr'] += crit_buf.getmedian().norm()
+                        self.g_analysis['gc_aggr'] += crit_buf.getMedian().norm()
                     elif 'max' in aggr:
-                        self.g_analysis['gc_aggr'] += crit_buf.getmax().norm()
+                        self.g_analysis['gc_aggr'] += crit_buf.getMax().norm()
                     else:
                         self.g_analysis['gc_aggr'] += crit_buf.averageTopC()
 
@@ -142,9 +143,6 @@ class SGD_FIFO(Optimizer):
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
-                        # if nesterov:
-                        #     d_p = d_p.add(momentum, buf)
-                        # else:
                         d_p = buf
 
                 p.data.add_(d_p, alpha=-group['lr'])
@@ -240,8 +238,8 @@ class Adam_FIFO(Optimizer):
                     # Exponential moving average of squared gradient values
                     state['exp_avg_sq'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
                     if kappa > 0.:
-                        state['critical gradients'] = priority_dict()
-                        state['critical gradients'].sethyper(decay_rate=decay, K=topc, sampling=sampling)
+                        state['critical gradients'] = priorityDict()
+                        state['critical gradients'].setHyper(decay_rate=decay, K=topc, sampling=sampling)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
@@ -251,7 +249,7 @@ class Adam_FIFO(Optimizer):
                         aggr_grad = aggregate(grad, state['critical gradients'], aggr)
                         if state['critical gradients'].isFull():
                             if critical_test:
-                                if grad_norm > state['critical gradients'].pokesmallest():
+                                if grad_norm > state['critical gradients'].pokeSmallest():
                                     self.offline_grad['yes'] += 1
                                     state['critical gradients'][grad_norm] = deepcopy(grad)
                                 else:
@@ -292,11 +290,11 @@ class Adam_FIFO(Optimizer):
                 self.g_analysis['count'] += 1
                 self.g_analysis['gt'] += p.grad.data.norm()
                 if 'mid' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmin().norm()
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMin().norm()
                 elif 'median' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmedian().norm()
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMedian().norm()
                 elif 'max' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmax().norm()
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMax().norm()
                 else:
                     self.g_analysis['gc_aggr'] += state['critical gradients'].averageTopC()
 
@@ -378,14 +376,14 @@ class RMSprop_FIFO(Optimizer):
                     if group['centered']:
                         state['grad_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
                     if kappa > 0.:
-                        state['critical gradients'] = priority_dict()
-                        state['critical gradients'].sethyper(decay_rate=decay, K=topc)
+                        state['critical gradients'] = priorityDict()
+                        state['critical gradients'].setHyper(decay_rate=decay, K=topc)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                 else:
                     aggr_grad = aggregate(grad, state['critical gradients'], aggr)
                     if kappa > 0.:
                         if state['critical gradients'].isFull():
-                            if grad_norm > state['critical gradients'].pokesmallest():
+                            if grad_norm > state['critical gradients'].pokeSmallest():
                                 self.offline_grad['yes'] += 1
                                 state['critical gradients'][grad_norm] = deepcopy(grad)
                             else:
@@ -501,15 +499,15 @@ class SGD_C_bottom(Optimizer):
                 if kappa != 0:
                     param_state = self.state[p]
                     if 'critical gradients' not in param_state:
-                        crit_buf = param_state['critical gradients'] = priority_dict()
-                        crit_buf.sethyper(decay_rate=decay, K=topc, sampling=sampling)
+                        crit_buf = param_state['critical gradients'] = priorityDict()
+                        crit_buf.setHyper(decay_rate=decay, K=topc, sampling=sampling)
                         crit_buf[d_p_norm] = deepcopy(d_p)
                     else:
                         crit_buf = param_state['critical gradients']
                         aggr_grad = aggregate(d_p, crit_buf, aggr, kappa)
                         if crit_buf.isFull():
                             if critical_test:
-                                if d_p_norm > crit_buf.pokesmallest():
+                                if d_p_norm > crit_buf.pokeSmallest():
                                     self.offline_grad['yes'] += 1
                                     crit_buf[d_p_norm] = deepcopy(d_p)
                                 else:
@@ -525,11 +523,11 @@ class SGD_C_bottom(Optimizer):
                     self.g_analysis['count'] += 1
                     self.g_analysis['gt'] += p.grad.data.norm()
                     if 'mid' in aggr:
-                        self.g_analysis['gc_aggr'] += crit_buf.getmin().norm()
+                        self.g_analysis['gc_aggr'] += crit_buf.getMin().norm()
                     elif 'median' in aggr:
-                        self.g_analysis['gc_aggr'] += crit_buf.getmedian().norm()
+                        self.g_analysis['gc_aggr'] += crit_buf.getMedian().norm()
                     elif 'max' in aggr:
-                        self.g_analysis['gc_aggr'] += crit_buf.getmax().norm()
+                        self.g_analysis['gc_aggr'] += crit_buf.getMax().norm()
                     else:
                         self.g_analysis['gc_aggr'] += crit_buf.averageTopC()
 
@@ -542,9 +540,6 @@ class SGD_C_bottom(Optimizer):
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
-                        # if nesterov:
-                        #     d_p = d_p.add(momentum, buf)
-                        # else:
                         d_p = buf
 
                 p.data.add_(d_p, alpha=-group['lr'])
@@ -633,8 +628,8 @@ class Adam_C_bottom(Optimizer):
                     # Exponential moving average of squared gradient values
                     state['exp_avg_sq'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
                     if kappa > 0.:
-                        state['critical gradients'] = priority_dict()
-                        state['critical gradients'].sethyper(decay_rate=decay, K=topc)
+                        state['critical gradients'] = priorityDict()
+                        state['critical gradients'].setHyper(decay_rate=decay, K=topc)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
@@ -643,7 +638,7 @@ class Adam_C_bottom(Optimizer):
                     if kappa > 0.:
                         aggr_grad = aggregate(grad, state['critical gradients'], aggr)
                         if state['critical gradients'].isFull():
-                            if grad_norm > state['critical gradients'].pokesmallest():
+                            if grad_norm > state['critical gradients'].pokeSmallest():
                                 self.offline_grad['yes'] += 1
                                 state['critical gradients'][grad_norm] = deepcopy(grad)
                             else:
@@ -681,11 +676,11 @@ class Adam_C_bottom(Optimizer):
                 self.g_analysis['count'] += 1
                 self.g_analysis['gt'] += p.grad.data.norm()
                 if 'mid' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmin().norm()
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMin().norm()
                 elif 'median' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmedian().norm()
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMedian().norm()
                 elif 'max' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmax().norm()
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMax().norm()
                 else:
                     self.g_analysis['gc_aggr'] += state['critical gradients'].averageTopC()
 
@@ -902,13 +897,13 @@ class SGD_C_double(Optimizer):
                 if kappa != 0:
                     param_state = self.state[p]
                     if 'critical gradients' not in param_state:
-                        crit_buf = param_state['critical gradients'] = priority_dict()
-                        crit_buf.sethyper(decay_rate=decay, K=topc)
+                        crit_buf = param_state['critical gradients'] = priorityDict()
+                        crit_buf.setHyper(decay_rate=decay, K=topc)
                         crit_buf[d_p_norm] = deepcopy(d_p)
                     else:
                         crit_buf = param_state['critical gradients']
                         if crit_buf.isFull():
-                            if d_p_norm > crit_buf.pokesmallest():
+                            if d_p_norm > crit_buf.pokeSmallest():
                                 self.offline_grad['yes'] += 1
                                 crit_buf[d_p_norm] = deepcopy(d_p)
                             else:
@@ -933,9 +928,6 @@ class SGD_C_double(Optimizer):
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
-                        # if nesterov:
-                        #     d_p = d_p.add(momentum, buf)
-                        # else:
                         d_p = buf
 
                 p.data.add_(d_p, alpha=-group['lr'])
@@ -1003,13 +995,13 @@ class SGD_C_Only(Optimizer):
                 if kappa != 0:
                     param_state = self.state[p]
                     if 'critical gradients' not in param_state:
-                        crit_buf = param_state['critical gradients'] = priority_dict()
-                        crit_buf.sethyper(decay_rate=decay, K=topc)
+                        crit_buf = param_state['critical gradients'] = priorityDict()
+                        crit_buf.setHyper(decay_rate=decay, K=topc)
                         crit_buf[d_p_norm] = deepcopy(d_p)
                     else:
                         crit_buf = param_state['critical gradients']
                         if crit_buf.isFull():
-                            if d_p_norm > crit_buf.pokesmallest():
+                            if d_p_norm > crit_buf.pokeSmallest():
                                 self.offline_grad['yes'] += 1
                                 crit_buf[d_p_norm] = deepcopy(d_p)
                             else:
@@ -1024,9 +1016,9 @@ class SGD_C_Only(Optimizer):
                     # x_new = x_old - lr * (momentum * grad_CG + (1-dampening) * grad_t)
                     # grad_CG <- topk gradients
                     if 'sum' in sum:
-                        crit_buf_ = crit_buf.gradsum()
+                        crit_buf_ = crit_buf.gradSum()
                     else:
-                        crit_buf_ = crit_buf.gradmean()
+                        crit_buf_ = crit_buf.gradMean()
                     crit_buf_.mul_(kappa)
                     crit_buf.decay()
                     d_p = crit_buf_
@@ -1037,16 +1029,7 @@ class SGD_C_Only(Optimizer):
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
-                        # if nesterov:
-                        #     d_p = d_p.add(momentum, buf)
-                        # else:
                         d_p = buf
-                # if nesterov:
-                #     d_p = d_p.add(momentum, buf)
-                # else:
-                #     d_p = crit_buf_
-                # if kappa != 0:
-                #     p.data.add_(-group['kappa'],crit_buf_)
 
                 p.data.add_(d_p, alpha=-group['lr'])
 
@@ -1129,8 +1112,8 @@ class Adam_C_double(Optimizer):
                     # Exponential moving average of squared gradient values
                     state['exp_avg_sq'] = torch.zeros_like(p.data)  # , memory_format=torch.preserve_format)
                     if kappa > 0.:
-                        state['critical gradients'] = priority_dict()
-                        state['critical gradients'].sethyper(decay_rate=decay, K=topc)
+                        state['critical gradients'] = priorityDict()
+                        state['critical gradients'].setHyper(decay_rate=decay, K=topc)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
@@ -1138,7 +1121,7 @@ class Adam_C_double(Optimizer):
                 else:
                     if kappa > 0.:
                         if state['critical gradients'].isFull():
-                            if grad_norm > state['critical gradients'].pokesmallest():
+                            if grad_norm > state['critical gradients'].pokeSmallest():
                                 self.offline_grad['yes'] += 1
                                 state['critical gradients'][grad_norm] = deepcopy(grad)
                             else:
@@ -1252,13 +1235,13 @@ class RMSprop_C_double(Optimizer):
                     if group['centered']:
                         state['grad_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
                     if kappa > 0.:
-                        state['critical gradients'] = priority_dict()
-                        state['critical gradients'].sethyper(decay_rate=decay, K=topc)
+                        state['critical gradients'] = priorityDict()
+                        state['critical gradients'].setHyper(decay_rate=decay, K=topc)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                 else:
                     if kappa > 0.:
                         if state['critical gradients'].isFull():
-                            if grad_norm > state['critical gradients'].pokesmallest():
+                            if grad_norm > state['critical gradients'].pokeSmallest():
                                 self.offline_grad['yes'] += 1
                                 state['critical gradients'][grad_norm] = deepcopy(grad)
                             else:
@@ -1378,9 +1361,9 @@ class SGD_C_HIST(Optimizer):
     an aggregation of current gradient and critical gradients.
     Conventional SGD or SGD with momentum can be recovered by setting kappa=0.
     The critical-gradient-specific keyword parameters are tuned for good
-    off-the-shelf performance, though additional tuning may be required for best results
+    off-the-shelf performance, though additional tuning may be required for best results.
 
-    This version of SGD_C is designed to maintain each gradient's age and can be used to generate histograms
+    This version of SGD_C is designed to maintain each gradient's age and can be used to generate histograms.
     """
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
@@ -1469,14 +1452,14 @@ class SGD_C_HIST(Optimizer):
                 if kappa != 0:
                     param_state = self.state[p]
                     if 'critical gradients' not in param_state:
-                        crit_buf = param_state['critical gradients'] = priority_dict_hist()
-                        crit_buf.sethyper(decay_rate=decay, K=topc)
+                        crit_buf = param_state['critical gradients'] = priorityDict()
+                        crit_buf.sethyper(decay_rate=decay, K=topc, hist=True)
                         crit_buf[total_norm] = deepcopy(d_p)
                     else:
                         crit_buf = param_state['critical gradients']
                         aggr_grad = aggregate(d_p, crit_buf, aggr, kappa)
                         if crit_buf.isFull():
-                            if total_norm > crit_buf.pokesmallest():
+                            if total_norm > crit_buf.pokeSmallest():
                                 self.offline_grad['yes'] += 1
                                 age_to_keep = crit_buf.pokesmallest_age()
                                 crit_buf[total_norm] = deepcopy(d_p)
@@ -1500,9 +1483,6 @@ class SGD_C_HIST(Optimizer):
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
-                        # if nesterov:
-                        #     d_p = d_p.add(momentum, buf)
-                        # else:
                         d_p = buf
 
                 p.data.add_(d_p, alpha=-group['lr'])
@@ -1676,14 +1656,14 @@ class AggMo_C(Optimizer):
                 if kappa != 0:
                     param_state = self.state[p]
                     if 'critical gradients' not in param_state:
-                        crit_buf = param_state['critical gradients'] = priority_dict()
-                        crit_buf.sethyper(decay_rate=decay, K=topc)
+                        crit_buf = param_state['critical gradients'] = priorityDict()
+                        crit_buf.setHyper(decay_rate=decay, K=topc)
                         crit_buf[total_norm] = deepcopy(d_p)
                     else:
                         crit_buf = param_state['critical gradients']
                         aggr_grad = aggregate(d_p, crit_buf, aggr, 1.0)
                         if crit_buf.isFull():
-                            if total_norm > crit_buf.pokesmallest():
+                            if total_norm > crit_buf.pokeSmallest():
                                 self.offline_grad['yes'] += 1
                                 crit_buf[total_norm] = deepcopy(d_p)
                             else:

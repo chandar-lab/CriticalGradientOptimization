@@ -10,15 +10,15 @@ import torch.onnx
 
 import wandb
 
-sys.path.append('..')
+sys.path.append('../..')
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import AggMo
+from optimizers.optim_experimental import AggMo
 
 # commandline arguments
 
 parser = argparse.ArgumentParser(description='PyTorch PennTreeBank RNN/LSTM/GRU/Transformer Language Model')
 
-parser.add_argument('--data_path', type=str, default='../Dataset')
+parser.add_argument('--data_path', type=str, default='../../Dataset')
 parser.add_argument('--results_path', type=str, default='..')
 
 parser.add_argument('--model', type=str, default='LSTM',
@@ -223,7 +223,7 @@ def HyperEvaluate(config):
 
     wandb.config.update(config)
 
-    MODEL_SAVE_PATH = os.path.join('../Results', config['dataset'], config['model'] + '_' + config['optim'], 'Model',
+    MODEL_SAVE_PATH = os.path.join('../../Results', config['dataset'], config['model'] + '_' + config['optim'], 'Model',
                                    run_id)
     if not os.path.exists(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)

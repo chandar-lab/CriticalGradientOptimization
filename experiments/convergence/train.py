@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from itertools import product
 
-sys.path.append('..')
+sys.path.append('../..')
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
 
 mem = Memory("./mycache")

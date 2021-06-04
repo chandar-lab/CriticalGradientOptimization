@@ -6,19 +6,15 @@ import argparse
 import json
 import os
 import shutil
-import time
 
 import torch
 
-from utils import util
+from experiments.multiwoz_lstm.utils import util
 from evaluate import MultiWozEvaluator
 from model.model import Model
 
 import time
 from io import open
-
-import numpy as np
-from torch.optim import Adam
 
 from pathlib import Path
 

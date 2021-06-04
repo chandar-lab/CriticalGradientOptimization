@@ -36,10 +36,10 @@ def getID(lettersCount=4, digitsCount=3):
 def createCSV(dataset,type):
     print(type)
     fieldnames=['ContextID','Sentence1', 'Sentence2', 'Label']
-    target = open(os.path.join('.', "processed_drop_snli_"+type+".csv"),"w")
+    target = open(os.path.join('', "processed_drop_snli_" + type + ".csv"), "w")
     writer = csv.DictWriter(target, fieldnames=fieldnames)
     #writer.writerow(dict(zip(fieldnames, fieldnames)))
-    clean_vocab = open(os.path.join('..','..','utils','glove_snli_vocab.txt')).readlines()
+    clean_vocab = open(os.path.join('..', '..', 'utils', 'glove_snli_vocab.txt')).readlines()
     clean_vocab = [w.strip() for w in clean_vocab]
     cnt = False
     for row in dataset:
@@ -56,7 +56,7 @@ def createCSV(dataset,type):
 
 
 def get_dataset(data_folder = '.'):
-    data_file = os.path.join('.', 'snli_'+data_folder+'.txt')
+    data_file = os.path.join('', 'snli_' + data_folder + '.txt')
     Data = csv.reader(open(data_file),delimiter='\t')
     createCSV(Data,data_folder)
 
