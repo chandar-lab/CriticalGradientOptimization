@@ -6,8 +6,6 @@ Although the history of gradients summarized in meta-parameters or explicitly st
 We propose a class of memory-augmented gradient descent optimizers that retain only the *critical* gradients, as defined by the L2-norm of the gradients, as opposed to the entire history. 
 This repository contains these memory-agumented optimizers as well as numerous models to test them on.
 
-This repository contains the code used in the paper *Memory Augmented Optimizers* by Parthasarathi, McRae, and Chandar. (Link will be added when posted to arXiv).
-
 ## Installation 
 
 All experiments were run using Python 3.6. Logging of results was handled using the WandB API. To install all prerequisites you can run:
@@ -40,7 +38,7 @@ Models and training scripts are segmented by architecture and/or dataset.
 
 To run code from the home folder,
 ```
-python <director>/train.py --data_path <data-directory> --results_path <wandb-result-directory>
+python experiments/<directory>/train.py --data_path <data-directory> --results_path <wandb-result-directory>
 ```
 
 The `--data_path` and `--results_path` arguments are optional, and will use default locations if not specified. Additional arguments can be passed to affect the model/training. These are dependent on the dataset/model.
@@ -58,6 +56,8 @@ LSTMEncoder, Infersent, and ConvNetEncoder for SNLI
 
 RoBERTa-Base and Bi-LSTM for MultiWoZ
 ```
+
+The `analysis` directory contains tools for visualizing the performance of these optimizers on different loss surfaces as well as a suite of other benchmark and analysis experiments.
 
 ## Usage
 

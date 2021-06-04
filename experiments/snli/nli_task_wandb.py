@@ -1,44 +1,28 @@
 import sys
-from torchtext import data
+
 # from code.rnn import RecurrentEncoder, Encoder, AttnDecoder, Decoder
 from dataset_utils.data_iterator import *
-import torch.optim as optim
-sys.path.append('..')
+
+sys.path.append('../..')
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-import torch
-import torch.nn as nn
 import numpy as np
 import argparse
 import os
-import logging
 import submitit
 from pathlib import Path
 from datetime import datetime
-import random
-import itertools
-import math
-import csv
 import wandb
 from filelock import FileLock
 
 import time
 
-# from comet_ml import OfflineExperiment
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
 
-from infersent_comp.data import get_nli, get_batch, build_vocab, DICO_LABEL
-from infersent_comp.mutils import get_optimizer
 from infersent_comp.models import NLINet
-import pandas as pd
-from collections import Counter
-import pdb
 
 from itertools import product
-
-os.environ["WANDB_API_KEY"] = '90b23c86b7e5108683b793009567e676b1f93888'
-os.environ["WANDB_MODE"] = "dryrun"
 
 # commandline arguments
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -67,11 +51,12 @@ def trainepoch(nli_net, train_iter, optimizer, loss_fn, epoch, params):
 
     last_time = time.time()
     correct = 0.
+    epoch_loss = 0
     S = {'yes': 0, 'no': 0}
     # shuffle the data
 
-    optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] * params.decay if epoch > 1 \
-                                                                                        and 'sgd' in params.optimizer else \
+    optimizer.param_groups[0]['lr'] = optimizer.param_groups[0][
+                                          'lr'] * params.decay if epoch > 1 and 'sgd' in params.optimizer else \
         optimizer.param_groups[0]['lr']
 
     print('Learning rate : {0}'.format(optimizer.param_groups[0]['lr']))
@@ -104,10 +89,7 @@ def trainepoch(nli_net, train_iter, optimizer, loss_fn, epoch, params):
         wandb.log({"Iteration Training Loss": loss})
 
         # update the parameters
-        if isinstance(optimizer, SAGA):
-            optimizer.step(index=i)
-        else:
-            optimizer.step()
+        optimizer.step()
         stats = optimizer.getOfflineStats()
         if stats:
             for k, v in stats.items():
@@ -146,7 +128,6 @@ def trainepoch(nli_net, train_iter, optimizer, loss_fn, epoch, params):
     train_acc = round(100 * correct / total_samples, 2)
     print('results : epoch {0} ; mean accuracy train : {1}'
           .format(epoch, train_acc))
-    # ex.log_metric('train_accuracy', train_acc, step=epoch)
     return train_acc, S
 
 
@@ -189,7 +170,8 @@ def evaluate(nli_net, valid_iter, optimizer, epoch, train_config, params, eval_t
                 with lock:
                     with open(res_file, 'a') as f:
                         f.write(
-                            'S1: ' + s1 + '\n' + 'S2: ' + s2 + '\n' + 'Target: ' + target + '\n' + 'Predicted: ' + test_prediction + '\n\n')
+                            'S1: ' + s1 + '\n' + 'S2: ' + s2 + '\n' + 'Target: ' + target + '\n' + 'Predicted: '
+                            + test_prediction + '\n\n')
                     lock.release()
     # save model
     eval_acc = round(100 * correct / total_samples, 2)
@@ -204,8 +186,6 @@ def evaluate(nli_net, valid_iter, optimizer, epoch, train_config, params, eval_t
     if eval_type == 'valid' and epoch <= params.n_epochs:
         if eval_acc > train_config['val_acc_best']:
             print('saving model at epoch {0}'.format(epoch))
-            # if not os.path.exists(params.outputdir):
-            #    os.makedirs(params.outputdir)
             torch.save(nli_net.state_dict(), params.outputmodelname)
             train_config['val_acc_best'] = eval_acc
         else:
@@ -219,7 +199,6 @@ def evaluate(nli_net, valid_iter, optimizer, epoch, train_config, params, eval_t
             if 'sgd' not in params.optimizer:
                 # early stopping (at 2nd decrease in accuracy)
                 train_config['stop_training'] = train_config['adam_stop']
-                # adam_stop = True
 
     return eval_acc, optimizer, train_config
 
@@ -276,12 +255,6 @@ def HyperEvaluate(config):
     parser.add_argument("--word_emb_type", type=str, default='normal',
                         help="word embedding type, either glove or normal")
 
-    # comet
-    # parser.add_argument("--comet_apikey", type=str, default='', help="comet api key")
-    # parser.add_argument("--comet_workspace", type=str, default='', help="comet workspace")
-    # parser.add_argument("--comet_project", type=str, default='', help="comet project name")
-    # parser.add_argument("--comet_disabled", action='store_true', help="if true, disable comet")
-
     params, _ = parser.parse_known_args()
 
     run_id = params.optimizer + '_exp_seed_{}'.format(params.seed)
@@ -310,20 +283,9 @@ def HyperEvaluate(config):
     print(params)
     pr = vars(params)
 
-    # ex = OfflineExperiment(
-    #                 workspace=pr['comet_workspace'],
-    #                 project_name=pr['comet_project'],
-    #                 disabled=pr['comet_disabled'],
-    #                 offline_directory= os.path.join(save_folder_name,'comet_runs'))
-    #
-    # ex.log_parameters(pr)
-    # ex.set_name(pr['encoder_type'])
-
     """
-    SEED
+    SETUP
     """
-    #    np.random.seed(params.seed)
-    #    torch.manual_seed(params.seed)
     device = 'cpu'
     if torch.cuda.is_available():
         device = 'cuda'
@@ -334,17 +296,6 @@ def HyperEvaluate(config):
     """
     train, valid, test, vocab, label_vocab = DataIteratorGlove(batch_size=params.batch_size, dataset=params.nlipath,
                                                                max_length=20, prefix='processed_')
-    # word_vec = build_vocab(train['s1'] + train['s2'] +
-    #                        valid['s1'] + valid['s2'] +
-    #                        test['s1'] + test['s2'], params.word_emb_path, emb_dim=params.word_emb_dim,
-    #                        wtype=params.word_emb_type)
-
-    # for split in ['s1', 's2']:
-    #     for data_type in ['train', 'valid', 'test']:
-    #         eval(data_type)[split] = np.array([['<s>'] +
-    #             [word for word in sent.split() if word in word_vec] +
-    #             ['</s>'] for sent in eval(data_type)[split]])
-
     # Train label class balancing
     weights = [2, 2, 2, 0.3, 7, 2, 6]
     # invert the weights by values
@@ -466,14 +417,14 @@ best_hyperparameters = None
 
 PARAM_GRID = list(product(
     ['InferSent'],  # , 'BLSTMprojEncoder', 'ConvNetEncoder'],             # model
-    [100],  # , 101, 102],#, 103, 104], # seeds
+    [100, 101, 102],#, 103, 104], # seeds
     ['snli'],  # dataset
-    ['sgd'],  # , 'SGDM', 'RMSprop', 'Adam', 'SGD_C', 'SGDM_C', 'RMSprop_C', 'Adam_C'], # optimizer
-    #    [0.1, 0.01, 0.001, 0.0001],  # lr
-    [0.99],  # , 0.95],  # decay
-    [5]  # ,10],  # topC
-    #    ['none'],         # aggr
-    #    [1.0]               # kappa
+    ['sgd_c'], # optimizer
+    [0.1, 0.01, 0.001, 0.0001],  # lr
+    [0.7, 0.9, 0.99],  # , 0.95],  # decay
+    [5, 10, 20],  # topC
+    ['sum'],         # aggr
+    [1.0]               # kappa
 ))
 
 # defaults to 1 if not running under SLURM

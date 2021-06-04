@@ -1,7 +1,7 @@
 import math
 import torch
 from torch.optim import Optimizer
-from .priorityDict import priority_dict
+from .prioritydict import priorityDict
 from copy import deepcopy
 
 """
@@ -25,39 +25,39 @@ def aggregate(d_p, crit_buf, func, kappa=1.0):
     """
 
     if "sum" == func:
-        crit_buf_ = crit_buf.gradmean()
+        crit_buf_ = crit_buf.gradMean()
         crit_buf_.mul_(kappa)
         return torch.add(d_p, crit_buf_)
     elif "mid" == func:
-        crit_buf_ = crit_buf.gradmean()
+        crit_buf_ = crit_buf.gradMean()
         crit_buf_.mul_(kappa)
         return torch.mul(torch.add(d_p, crit_buf_), 0.5)
     elif "mean" == func:
-        crit_buf_ = crit_buf.gradsum()
+        crit_buf_ = crit_buf.gradSum()
         crit_buf_.mul_(kappa)
         return torch.div(torch.add(d_p, crit_buf_), crit_buf.size() + 1)
     elif "min" == func:
-        crit_buf_ = crit_buf.getmin()
+        crit_buf_ = crit_buf.getMin()
         crit_buf_.mul_(kappa)
         return torch.add(d_p, crit_buf_)
     elif "median" == func:
-        crit_buf_ = crit_buf.getmedian()
+        crit_buf_ = crit_buf.getMedian()
         crit_buf_.mul_(kappa)
         return torch.add(d_p, crit_buf_)
     elif "max" == func:
-        crit_buf_ = crit_buf.getmax()
+        crit_buf_ = crit_buf.getMax()
         crit_buf_.mul_(kappa)
         return torch.add(d_p, crit_buf_)
     elif "min-mean" == func:
-        crit_buf_ = crit_buf.getmin()
+        crit_buf_ = crit_buf.getMin()
         crit_buf_.mul_(kappa)
         return torch.mul(torch.add(d_p, crit_buf_), 0.5)
     elif "median-mean" == func:
-        crit_buf_ = crit_buf.getmedian()
+        crit_buf_ = crit_buf.getMedian()
         crit_buf_.mul_(kappa)
         return torch.mul(torch.add(d_p, crit_buf_), 0.5)
     elif "max-mean" == func:
-        crit_buf_ = crit_buf.getmax()
+        crit_buf_ = crit_buf.getMax()
         crit_buf_.mul_(kappa)
         return torch.mul(torch.add(d_p, crit_buf_), 0.5)
     else:
@@ -253,15 +253,15 @@ class SGD_C(Optimizer):
                 if kappa != 0:
                     param_state = self.state[p]
                     if 'critical gradients' not in param_state:
-                        crit_buf = param_state['critical gradients'] = priority_dict()
-                        crit_buf.sethyper(decay_rate=decay, K=topc, sampling=sampling)
+                        crit_buf = param_state['critical gradients'] = priorityDict()
+                        crit_buf.setHyper(decay_rate=decay, K=topc, sampling=sampling)
                         crit_buf[d_p_norm] = deepcopy(d_p)
                     else:
                         crit_buf = param_state['critical gradients']
                         aggr_grad = aggregate(d_p, crit_buf, aggr, kappa)
                         if crit_buf.isFull():
                             if critical_test:
-                                if d_p_norm > crit_buf.pokesmallest():
+                                if d_p_norm > crit_buf.pokeSmallest():
                                     self.offline_grad['yes'] += 1
                                     crit_buf[d_p_norm] = deepcopy(d_p)
                                 else:
@@ -277,11 +277,11 @@ class SGD_C(Optimizer):
                     self.g_analysis['count'] += 1
                     self.g_analysis['gt'] += p.grad.data.norm()
                     if 'mid' in aggr:
-                        self.g_analysis['gc_aggr'] += crit_buf.getmin().norm()
+                        self.g_analysis['gc_aggr'] += crit_buf.getMin().norm()
                     elif 'median' in aggr:
-                        self.g_analysis['gc_aggr'] += crit_buf.getmedian().norm()
+                        self.g_analysis['gc_aggr'] += crit_buf.getMedian().norm()
                     elif 'max' in aggr:
-                        self.g_analysis['gc_aggr'] += crit_buf.getmax().norm()
+                        self.g_analysis['gc_aggr'] += crit_buf.getMax().norm()
                     else:
                         self.g_analysis['gc_aggr'] += crit_buf.averageTopC()
 
@@ -522,8 +522,8 @@ class Adam_C(Optimizer):
                     # Exponential moving average of squared gradient values
                     state['exp_avg_sq'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
                     if kappa > 0.:
-                        state['critical gradients'] = priority_dict()
-                        state['critical gradients'].sethyper(decay_rate=decay, K=topc, sampling=sampling)
+                        state['critical gradients'] = priorityDict()
+                        state['critical gradients'].setHyper(decay_rate=decay, K=topc, sampling=sampling)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
@@ -533,7 +533,7 @@ class Adam_C(Optimizer):
                         aggr_grad = aggregate(grad, state['critical gradients'], aggr)
                         if state['critical gradients'].isFull():
                             if critical_test:
-                                if grad_norm > state['critical gradients'].pokesmallest():
+                                if grad_norm > state['critical gradients'].pokeSmallest():
                                     self.offline_grad['yes'] += 1
                                     state['critical gradients'][grad_norm] = deepcopy(grad)
                                 else:
@@ -574,11 +574,11 @@ class Adam_C(Optimizer):
                 self.g_analysis['count'] += 1
                 self.g_analysis['gt'] += p.grad.data.norm()
                 if 'mid' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmin().norm()
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMin().norm()
                 elif 'median' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmedian().norm()
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMedian().norm()
                 elif 'max' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getmax().norm()
+                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMax().norm()
                 else:
                     self.g_analysis['gc_aggr'] += state['critical gradients'].averageTopC()
 
@@ -786,14 +786,14 @@ class RMSprop_C(Optimizer):
                     if group['centered']:
                         state['grad_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
                     if kappa > 0.:
-                        state['critical gradients'] = priority_dict()
-                        state['critical gradients'].sethyper(decay_rate=decay, K=topc)
+                        state['critical gradients'] = priorityDict()
+                        state['critical gradients'].setHyper(decay_rate=decay, K=topc)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                 else:
                     aggr_grad = aggregate(grad, state['critical gradients'], aggr)
                     if kappa > 0.:
                         if state['critical gradients'].isFull():
-                            if grad_norm > state['critical gradients'].pokesmallest():
+                            if grad_norm > state['critical gradients'].pokeSmallest():
                                 self.offline_grad['yes'] += 1
                                 state['critical gradients'][grad_norm] = deepcopy(grad)
                             else:

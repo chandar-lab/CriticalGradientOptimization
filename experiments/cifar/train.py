@@ -11,16 +11,16 @@ import model.cifar as models
 import wandb
 from model.convnets import CIFAR10CNNModel, CIFAR100CNNModel, CIFAR100CNNModel_noDropOut
 
-sys.path.append('..')
+sys.path.append('../..')
 from data_loader import load_data_subset
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
-from optimizers.optimExperimental import AggMo_C
+from optimizers.optim_experimental import AggMo_C
 
 # commandline arguments
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--data_path', type=str, default='../Dataset')
+parser.add_argument('--data_path', type=str, default='../../Dataset')
 parser.add_argument('--results_path', type=str, default='..')
 
 parser.add_argument('--batch_size', type=int, default=64)
@@ -130,7 +130,7 @@ def HyperEvaluate(config):
 
     wandb.config.update(config)
 
-    MODEL_SAVE_PATH = os.path.join('../Results', config['dataset'], config['model'] + '_' + config['optim'], 'Model',
+    MODEL_SAVE_PATH = os.path.join('../../Results', config['dataset'], config['model'] + '_' + config['optim'], 'Model',
                                    run_id)
     if not os.path.exists(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)

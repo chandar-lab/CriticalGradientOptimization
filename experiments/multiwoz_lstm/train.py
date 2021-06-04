@@ -1,14 +1,11 @@
 from __future__ import division, print_function, unicode_literals
 
-import argparse
 import json
 import random
 import time
 from io import open
 
-import numpy as np
 import torch
-from torch.optim import Adam
 
 from utils import util
 from model.model import Model
@@ -80,8 +77,9 @@ def trainIters(model,train_dials, val_dials, n_epochs=10, args='args'):
         print_act_total_avg = print_act_total / len(train_dials)
         print_grad_avg = print_grad_total / len(train_dials)
         print('TIME:', time.time() - start_time)
-        print('Time since %s (Epoch:%d %d%%) Loss: %.4f, Loss act: %.4f, Grad: %.4f' % (util.timeSince(start, epoch / n_epochs),
-                                                            epoch, epoch / n_epochs * 100, print_loss_avg, print_act_total_avg, print_grad_avg))
+        print('Time since %s (Epoch:%d %d%%) Loss: %.4f, Loss act: %.4f, Grad: %.4f' % (
+        util.timeSince(start, epoch / n_epochs),
+        epoch, epoch / n_epochs * 100, print_loss_avg, print_act_total_avg, print_grad_avg))
 
         # VALIDATION
         valid_loss = 0
@@ -90,8 +88,8 @@ def trainIters(model,train_dials, val_dials, n_epochs=10, args='args'):
         for name, val_file in val_dials.items():
             input_tensor = []; target_tensor = []; bs_tensor = [];db_tensor = []
             input_tensor, target_tensor, bs_tensor, db_tensor = util.loadDialogue(model, val_file, input_tensor,
-                                                                                         target_tensor, bs_tensor,
-                                                                                         db_tensor)
+                                                                                  target_tensor, bs_tensor,
+                                                                                  db_tensor)
             # create an empty matrix with padding tokens
             input_tensor, input_lengths = util.padSequence(input_tensor)
             target_tensor, target_lengths = util.padSequence(target_tensor)
@@ -137,7 +135,7 @@ def HyperEvaluate(config):
 
     parser.add_argument('--use_attn', type=util.str2bool, nargs='?', const=True, default=True)
     parser.add_argument('--attention_type', type=str, default='bahdanau')
-    parser.add_argument('--use_emb',  type=util.str2bool, nargs='?', const=True, default=False)
+    parser.add_argument('--use_emb', type=util.str2bool, nargs='?', const=True, default=False)
 
     parser.add_argument('--emb_size', type=int, default=50)
     parser.add_argument('--hid_size_enc', type=int, default=150)
