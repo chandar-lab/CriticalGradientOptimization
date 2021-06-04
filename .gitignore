@@ -4,7 +4,6 @@
 *.csv
 *.pyc
 *.lock
-*.txt
 *.pt
 *Results/*
 *.zip
