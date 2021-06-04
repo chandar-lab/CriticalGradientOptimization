@@ -1,9 +1,10 @@
-#from Code.RNN import RecurrentEncoder, Encoder, AttnDecoder, Decoder
-#from Code.Transformer import TransformerModel
 import torch
 import torch.nn as nn
+import random
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 class EncoderDecoder(nn.Module):
     ''' This class contains the implementation of complete sequence to sequence network.
     It uses to encoder to produce the context vectors.
@@ -12,14 +13,15 @@ class EncoderDecoder(nn.Module):
         encoder: A Encoder class instance.
         decoder: A Decoder class instance.
     '''
-    def __init__(self, encoder, decoder, attn = False, data='image'):
+
+    def __init__(self, encoder, decoder, attn=False, data='image'):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.encoder_attn = attn
         self.data = data
 
-    def forward(self, src, trg = None, teacher_forcing_ratio=1.0, probetask = False):
+    def forward(self, src, trg=None, teacher_forcing_ratio=1.0, probetask=False):
         # src is of shape [sequence_len, batch_size]
         # trg is of shape [sequence_len, batch_size]
         # if teacher_forcing_ratio is 0.5 we use ground-truth inputs 50% of time and 50% time we use decoder outputs.

@@ -910,13 +910,6 @@ class SGD_C_double(Optimizer):
                                 self.offline_grad['no'] += 1
                         else:
                             crit_buf[d_p_norm] = deepcopy(d_p)
-                    # Critical Gradients
-                    # x_new = x_old - lr * grad
-                    # x_new = x_old - lr * (momentum * grad_<t + (1-dampening) * grad_t)
-                    # understand how the projection happens col_space or row_space
-                    # CG method:
-                    # x_new = x_old - lr * (momentum * grad_CG + (1-dampening) * grad_t)
-                    # grad_CG <- topk gradients
 
                     d_p = aggregate(d_p, crit_buf, sum, kappa)
                     crit_buf.decay()
@@ -980,7 +973,6 @@ class SGD_C_Only(Optimizer):
             dampening = group['dampening']
             decay = group['decay']
             momentum = group['momentum']
-            #    nesterov = group['nesterov']
             topc = group['topC']
             sum = group['sum']
 
@@ -1008,13 +1000,6 @@ class SGD_C_Only(Optimizer):
                                 self.offline_grad['no'] += 1
                         else:
                             crit_buf[d_p_norm] = deepcopy(d_p)
-                    # Critical Gradients
-                    # x_new = x_old - lr * grad
-                    # x_new = x_old - lr * (momentum * grad_<t + (1-dampening) * grad_t)
-                    # understand how the projection happens col_space or row_space
-                    # CG method:
-                    # x_new = x_old - lr * (momentum * grad_CG + (1-dampening) * grad_t)
-                    # grad_CG <- topk gradients
                     if 'sum' in sum:
                         crit_buf_ = crit_buf.gradSum()
                     else:

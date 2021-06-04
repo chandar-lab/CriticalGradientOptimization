@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 This dataloader comes courtesy of https://github.com/chandar-lab/PatchUp/
 """
 
+
 def per_image_standardization(x):
     y = x.view(-1, x.shape[1] * x.shape[2] * x.shape[3])
     mean = y.mean(dim=1, keepdim=True).expand_as(y)
@@ -143,8 +144,6 @@ def load_data_subset(data_aug, batch_size, workers, dataset, data_target_dir, la
         # Only choose digits in n_labels
         # n = number of labels per class for training
         # n_val = number of lables per class for validation
-        # print type(labels)
-        # print (n_valid)
         (indices,) = np.where(reduce(__or__, [labels == i for i in np.arange(n_labels)]))
         # Ensure uniform distribution of labels
         np.random.shuffle(indices)
@@ -172,7 +171,6 @@ def load_data_subset(data_aug, batch_size, workers, dataset, data_target_dir, la
         train_sampler, valid_sampler, unlabelled_sampler = get_sampler(train_data.targets, labels_per_class,
                                                                        valid_labels_per_class)
 
-
     labelled = torch.utils.data.DataLoader(train_data, batch_size=batch_size, sampler=train_sampler, shuffle=False,
                                            num_workers=workers, pin_memory=True)
     validation = torch.utils.data.DataLoader(train_data, batch_size=batch_size, sampler=valid_sampler,
@@ -180,7 +178,7 @@ def load_data_subset(data_aug, batch_size, workers, dataset, data_target_dir, la
     unlabelled = torch.utils.data.DataLoader(train_data, batch_size=batch_size, sampler=unlabelled_sampler,
                                              shuffle=False, num_workers=workers, pin_memory=True)
     test = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=workers,
-                                           pin_memory=True)
+                                       pin_memory=True)
 
     return labelled, validation, unlabelled, test, num_classes
 
@@ -218,5 +216,3 @@ def imshow(img, title):
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     plt.title(title)
     plt.show()
-
-

@@ -70,21 +70,6 @@ class Optimizer:
         self.loss_list += [float(self.loss_func.get_func_val([self.w1, self.w2]))]
 
     def plot(self, ax):
-        # ax.quiver(self.w1_list[:-1], self.w2_list[:-1], [ a-b for a,b in zip(self.w1_list[1:],self.w1_list[:-1])], \
-        # [ a-b for a,b in zip(self.w2_list[1:],self.w2_list[:-1])],\
-        # scale_units='xy', angles='xy', scale=1, color=self.color)
         ln, = ax.plot(self.w1_list[:-1], self.w2_list[:-1], self.color + '->', lw=1, label=self.name)
         return ln
 
-    # ax.plot(self.w1_list,
-    #         self.w2_list,
-    #         self.loss_list,
-    #         linewidth=0.5,
-    #         label=self.name,
-    #         color=self.color)
-    # ax.scatter(self.w1_list[-1],
-    #            self.w2_list[-1],
-    #            self.loss_list[-1],
-    #            s=3, depthshade=True,
-    #            label=self.name,
-    #            color=self.color)
