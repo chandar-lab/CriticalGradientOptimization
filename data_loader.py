@@ -183,33 +183,6 @@ def load_data_subset(data_aug, batch_size, workers, dataset, data_target_dir, la
     return labelled, validation, unlabelled, test, num_classes
 
 
-def load_transformed_test_sets(path, batch_size=100, workers=0):
-    data_loaders = []
-    for r, d, f in os.walk(path):
-        if len(f) > 0:
-            for file in f:
-                file_path = os.path.join(r, file)
-                if file == 'images.npy':
-                    x_test = np.load(file_path)
-                elif file == 'targets.npy':
-                    y_test = np.load(file_path)
-                elif file == 'classes.npy':
-                    classes = np.load(file_path)
-                elif file == 'transformer.npy':
-                    transformer = np.load(file_path)
-
-            tensor_x = torch.Tensor(np.array(x_test))
-            tensor_y = torch.Tensor(np.array(y_test))
-
-            dataset = torch.utils.data.TensorDataset(tensor_x, tensor_y)
-            dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=workers,
-                                                     pin_memory=True)
-            dataloader.transformer = transformer[0]
-            dataloader.classes = classes
-            data_loaders.append(dataloader)
-    return data_loaders
-
-
 def imshow(img, title):
     img = img / 2 + 0.5
     npimg = img.numpy()

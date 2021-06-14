@@ -8,7 +8,7 @@ This repository contains these memory-agumented optimizers as well as numerous m
 
 ## Installation 
 
-All experiments were run using Python 3.6. Logging of results was handled using the WandB API. To install all prerequisites you can run:
+The code in this repository will run on Python versions 3.6 and later. All experiments were run using Python 3.6. Logging of results was handled using the WandB API. To install all prerequisites you can run:
 
 ```
 pip install -r requirements.txt
