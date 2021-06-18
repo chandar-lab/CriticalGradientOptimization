@@ -4,9 +4,9 @@ import numpy as np
 
 from nlp import normalize
 
-
 # loading databases
-domains = ['restaurant', 'hotel', 'attraction', 'train', 'taxi', 'hospital']#, 'police']
+domains = ['restaurant', 'hotel', 'attraction', 'train', 'taxi',
+           'hospital']  # , 'police']
 dbs = {}
 for domain in domains:
     db = 'db/{}-dbase.db'.format(domain)
@@ -21,7 +21,7 @@ def oneHotVector(num, domain, vector):
     if domain != 'train':
         idx = domains.index(domain)
         if num == 0:
-            vector[idx * 6: idx * 6 + 6] = np.array([1, 0, 0, 0, 0,0])
+            vector[idx * 6: idx * 6 + 6] = np.array([1, 0, 0, 0, 0, 0])
         elif num == 1:
             vector[idx * 6: idx * 6 + 6] = np.array([0, 1, 0, 0, 0, 0])
         elif num == 2:
@@ -49,6 +49,7 @@ def oneHotVector(num, domain, vector):
 
     return vector
 
+
 def queryResult(domain, turn):
     """Returns the list of entities for a given domain
     based on the annotation of the belief state"""
@@ -56,15 +57,16 @@ def queryResult(domain, turn):
     sql_query = "select * from {}".format(domain)
 
     flag = True
-    #print turn['metadata'][domain]['semi']
+    # print turn['metadata'][domain]['semi']
     for key, val in turn['metadata'][domain]['semi'].items():
-        if val == "" or val == "dont care" or val == 'not mentioned' or val == "don't care" or val == "dontcare" or val == "do n't care":
+        if val == "" or val == "dont care" or val == 'not mentioned' or \
+                val == "don't care" or val == "dontcare" or val == "do n't care":
             pass
         else:
             if flag:
                 sql_query += " where "
                 val2 = val.replace("'", "''")
-                #val2 = normalize(val2)
+                # val2 = normalize(val2)
                 # change query for trains
                 if key == 'leaveAt':
                     sql_query += r" " + key + " > " + r"'" + val2 + r"'"
@@ -75,7 +77,7 @@ def queryResult(domain, turn):
                 flag = False
             else:
                 val2 = val.replace("'", "''")
-                #val2 = normalize(val2)
+                # val2 = normalize(val2)
                 if key == 'leaveAt':
                     sql_query += r" and " + key + " > " + r"'" + val2 + r"'"
                 elif key == 'arriveBy':
@@ -83,9 +85,9 @@ def queryResult(domain, turn):
                 else:
                     sql_query += r" and " + key + "=" + r"'" + val2 + r"'"
 
-    #try:  # "select * from attraction  where name = 'queens college'"
-    #print sql_query
-    #print domain
+    # try:  # "select * from attraction  where name = 'queens college'"
+    # print sql_query
+    # print domain
     num_entities = len(dbs[domain].execute(sql_query).fetchall())
 
     return num_entities
@@ -97,7 +99,7 @@ def queryResultVenues(domain, turn, real_belief=False):
 
     if real_belief == True:
         items = turn.items()
-    elif real_belief=='tracking':
+    elif real_belief == 'tracking':
         for slot in turn[domain]:
             key = slot[0].split("-")[1]
             val = slot[0].split("-")[2]
@@ -141,7 +143,8 @@ def queryResultVenues(domain, turn, real_belief=False):
 
     flag = True
     for key, val in items:
-        if val == "" or val == "dontcare" or val == 'not mentioned' or val == "don't care" or val == "dont care" or val == "do n't care":
+        if val == "" or val == "dontcare" or val == 'not mentioned' or \
+                val == "don't care" or val == "dont care" or val == "do n't care":
             pass
         else:
             if flag:
@@ -151,7 +154,7 @@ def queryResultVenues(domain, turn, real_belief=False):
                 if key == 'leaveAt':
                     sql_query += r" " + key + " > " + r"'" + val2 + r"'"
                 elif key == 'arriveBy':
-                    sql_query += r" " +key + " < " + r"'" + val2 + r"'"
+                    sql_query += r" " + key + " < " + r"'" + val2 + r"'"
                 else:
                     sql_query += r" " + key + "=" + r"'" + val2 + r"'"
                 flag = False

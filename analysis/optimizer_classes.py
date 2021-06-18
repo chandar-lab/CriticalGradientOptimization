@@ -1,10 +1,6 @@
 import torch
 
-from .losses import *
-
 from optimizers.optim import SGD, Adam, SGD_C, Adam_C, RMSprop, RMSprop_C
-from optimizers.optim_experimental import SAGA
-from torch.autograd import Variable
 
 
 class Optimizer:
@@ -70,6 +66,6 @@ class Optimizer:
         self.loss_list += [float(self.loss_func.get_func_val([self.w1, self.w2]))]
 
     def plot(self, ax):
-        ln, = ax.plot(self.w1_list[:-1], self.w2_list[:-1], self.color + '->', lw=1, label=self.name)
+        ln, = ax.plot(self.w1_list[:-1], self.w2_list[:-1], self.color + '->', lw=1,
+                      label=self.name)
         return ln
-

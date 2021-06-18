@@ -1,40 +1,35 @@
 """
-Fine-tuning the library models for language modeling on a text file (GPT, GPT-2, BERT, RoBERTa).
-GPT and GPT-2 are fine-tuned using a causal language modeling (CLM) loss while BERT and RoBERTa are fine-tuned
-using a masked language modeling (MLM) loss.
+Fine-tuning the library models for language modeling on a text file
+(GPT, GPT-2, BERT, RoBERTa).
+
+GPT and GPT-2 are fine-tuned using a causal language modeling (CLM)
+loss while BERT and RoBERTa are fine-tuned using a masked language modeling (MLM) loss.
 """
 
+import argparse
 import glob
 import logging
-import submitit
 import os
 import pickle
 import random
 import re
 import shutil
+from datetime import datetime
+from itertools import product
+from pathlib import Path
 from typing import Dict, List, Tuple
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+import submitit
 import torch
 import wandb
-import argparse
-from itertools import product
-from datetime import datetime
-
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
-#from tqdm.notebook import trange
-
-#from tqdm import tqdm
-
-from pathlib import Path
-
 from transformers import (
     MODEL_WITH_LM_HEAD_MAPPING,
     WEIGHTS_NAME,
-    AdamW,
     AutoConfig,
     AutoModelWithLMHead,
     AutoModelForCausalLM,
@@ -49,26 +44,23 @@ from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
 os.environ["WANDB_API_KEY"] = ''
 os.environ["WANDB_MODE"] = "dryrun"
 
-# try:
-#     from torch.utils.tensorboard import SummaryWriter
-# except ImportError:
-#     from tensorboardX import SummaryWriter
-
 # Configs
 logger = logging.getLogger(__name__)
 
 MODEL_CONFIG_CLASSES = list(MODEL_WITH_LM_HEAD_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
+
 # Args to allow for easy convertion of python script to notebook
 class Args():
-    def __init__(self, model = 'roberta', lr = 0.00001, optdecay = 0, topC = 0, dataset = 'multiwoz', optimizer = 'adam', seed = 42):
+    def __init__(self, model='roberta', lr=0.00001, optdecay=0, topC=0,
+                 dataset='multiwoz', optimizer='adam', seed=42):
 
         if model == 'roberta':
-            self.model_type = 'roberta-base'#'gpt2'
-            self.model_name_or_path = 'roberta-base'#'microsoft/DialoGPT-small'#'roberta-base'#
-            self.config_name = 'roberta-base'#'microsoft/DialoGPT-small'
-            self.tokenizer_name = 'roberta-base'#'microsoft/DialoGPT-small'
+            self.model_type = 'roberta-base'
+            self.model_name_or_path = 'roberta-base'
+            self.config_name = 'roberta-base'
+            self.tokenizer_name = 'roberta-base'
         elif model == 'gpt':
             self.model_type = 'gpt2'
             self.model_name_or_path = 'microsoft/DialoGPT-small'
@@ -83,7 +75,7 @@ class Args():
         self.per_gpu_train_batch_size = 4
         self.per_gpu_eval_batch_size = 4
         self.gradient_accumulation_steps = 1
-        self.learning_rate = lr #1e-5
+        self.learning_rate = lr  # 1e-5
         self.weight_decay = 0.0
         self.adam_epsilon = 1e-8
         self.max_grad_norm = 1.0
@@ -105,27 +97,32 @@ class Args():
         self.optdecay = optdecay
         self.topC = topC
 
-
-        self.run_id = self.optimizer+'_'+str(self.optdecay)+'_'+str(self.topC)+'_'+str(self.learning_rate)+'_exp_seed_{}'.format(self.seed)
-        self.output_dir = os.path.join('Results', dataset,'roberta',self.run_id)
+        self.run_id = self.optimizer + '_' + str(self.optdecay) + '_' + str(
+            self.topC) + '_' + str(
+            self.learning_rate) + '_exp_seed_{}'.format(self.seed)
+        self.output_dir = os.path.join('Results', dataset, 'roberta', self.run_id)
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
-        self.samples_dir = os.path.join('Results',dataset,'Samples',self.run_id)
+        self.samples_dir = os.path.join('Results', dataset, 'Samples', self.run_id)
         if not os.path.exists(self.samples_dir):
             os.makedirs(self.samples_dir)
 
-def construct_conv(row, tokenizer, eos = True):
-    # from: https://stackoverflow.com/questions/952914/how-to-make-a-flat-list-out-of-list-of-lists
+
+def construct_conv(row, tokenizer, eos=True):
+    # from:
+    # https://stackoverflow.com/questions/952914/how-to-make-a-flat-list-out-of-list-of-lists
     flatten = lambda l: [item for sublist in l for item in sublist]
     conv = list(reversed([tokenizer.encode(x) + [tokenizer.eos_token_id] for x in row]))
     conv = flatten(conv)
     return conv
 
+
 class ConversationDataset(Dataset):
     def __init__(self, tokenizer: PreTrainedTokenizer, args, df, block_size=512):
 
-        block_size = block_size - (tokenizer.model_max_length - tokenizer.max_len_single_sentence)
+        block_size = block_size - (
+                tokenizer.model_max_length - tokenizer.max_len_single_sentence)
 
         directory = args.cache_dir
         cached_features_file = os.path.join(
@@ -145,9 +142,10 @@ class ConversationDataset(Dataset):
                 if len(conv) > block_size: continue
                 self.examples.append(conv)
 
-            # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
-            # If your dataset is small, first you should loook for a bigger one :-) and second you
-            # can change this behavior by adding (model specific) padding.
+            # Note that we are loosing the last truncated example here for the sake of
+            # simplicity (no padding)
+            # If your dataset is small, first you should loook for a bigger one :-) and
+            # second you can change this behavior by adding (model specific) padding.
 
             logger.info("Saving features into cached file %s", cached_features_file)
             with open(cached_features_file, "wb") as handle:
@@ -158,6 +156,7 @@ class ConversationDataset(Dataset):
 
     def __getitem__(self, item):
         return torch.tensor(self.examples[item], dtype=torch.long)
+
 
 # Cacheing and storing of data/checkpoints
 
@@ -173,10 +172,12 @@ def set_seed(args):
         torch.cuda.manual_seed_all(args.seed)
 
 
-def _sorted_checkpoints(args, checkpoint_prefix="checkpoint", use_mtime=False) -> List[str]:
+def _sorted_checkpoints(args, checkpoint_prefix="checkpoint", use_mtime=False) -> \
+        List[str]:
     ordering_and_checkpoint_path = []
 
-    glob_checkpoints = glob.glob(os.path.join(args.output_dir, "{}-*".format(checkpoint_prefix)))
+    glob_checkpoints = glob.glob(
+        os.path.join(args.output_dir, "{}-*".format(checkpoint_prefix)))
 
     for path in glob_checkpoints:
         if use_mtime:
@@ -184,7 +185,8 @@ def _sorted_checkpoints(args, checkpoint_prefix="checkpoint", use_mtime=False) -
         else:
             regex_match = re.match(".*{}-([0-9]+)".format(checkpoint_prefix), path)
             if regex_match and regex_match.groups():
-                ordering_and_checkpoint_path.append((int(regex_match.groups()[0]), path))
+                ordering_and_checkpoint_path.append(
+                    (int(regex_match.groups()[0]), path))
 
     checkpoints_sorted = sorted(ordering_and_checkpoint_path)
     checkpoints_sorted = [checkpoint[1] for checkpoint in checkpoints_sorted]
@@ -202,17 +204,22 @@ def _rotate_checkpoints(args, checkpoint_prefix="checkpoint", use_mtime=False) -
     if len(checkpoints_sorted) <= args.save_total_limit:
         return
 
-    number_of_checkpoints_to_delete = max(0, len(checkpoints_sorted) - args.save_total_limit)
+    number_of_checkpoints_to_delete = max(0, len(checkpoints_sorted) -
+                                          args.save_total_limit)
     checkpoints_to_be_deleted = checkpoints_sorted[:number_of_checkpoints_to_delete]
     for checkpoint in checkpoints_to_be_deleted:
-        logger.info("Deleting older checkpoint [{}] due to args.save_total_limit".format(checkpoint))
+        logger.info(
+            "Deleting older checkpoint [{}] due to args.save_total_limit".format(
+                checkpoint))
         shutil.rmtree(checkpoint)
+
 
 # Training of model
 
-def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, df_trn, df_val) -> Tuple[int, float]:
+def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedTokenizer,
+          df_trn, df_val) -> Tuple[int, float]:
     """ Train the model """
-    wandb.init(project="critical-gradients-multiwoz-gt_vs_gc", reinit = True)
+    wandb.init(project="critical-gradients-multiwoz-gt_vs_gc", reinit=True)
     wandb.run.name = args.run_id
 
     wandb.config.update(vars(args))
@@ -225,72 +232,90 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
     def collate(examples: List[torch.Tensor]):
         if tokenizer._pad_token is None:
             return pad_sequence(examples, batch_first=True)
-        return pad_sequence(examples, batch_first=True, padding_value=tokenizer.pad_token_id)
+        return pad_sequence(examples, batch_first=True,
+                            padding_value=tokenizer.pad_token_id)
 
-    train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
+    train_sampler = RandomSampler(
+        train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
     train_dataloader = DataLoader(
-        train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, collate_fn=collate, drop_last = True
+        train_dataset, sampler=train_sampler, batch_size=args.train_batch_size,
+        collate_fn=collate, drop_last=True
     )
 
     if args.max_steps > 0:
         t_total = args.max_steps
-        args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
+        args.num_train_epochs = args.max_steps // (
+                len(train_dataloader) // args.gradient_accumulation_steps) + 1
     else:
-        t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
-
-    model = model.module if hasattr(model, "module") else model  # Take care of distributed/parallel training
+        t_total = len(train_dataloader) // \
+                  args.gradient_accumulation_steps * args.num_train_epochs
+    # Take care of distributed/parallel training
+    model = model.module if hasattr(model, "module") else model
     model.resize_token_embeddings(len(tokenizer))
     # add_special_tokens_(model, tokenizer)
-
 
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
-            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "params": [p for n, p in model.named_parameters() if
+                       not any(nd in n for nd in no_decay)],
             "weight_decay": args.weight_decay,
         },
-        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+        {"params": [p for n, p in model.named_parameters() if
+                    any(nd in n for nd in no_decay)], "weight_decay": 0.0},
     ]
 
     # Add optimizers
     if args.optimizer == 'sgd':
-        optimizer = SGD(optimizer_grouped_parameters,lr = args.learning_rate)
+        optimizer = SGD(optimizer_grouped_parameters, lr=args.learning_rate)
     elif args.optimizer == 'sgdm':
-        optimizer = SGD(optimizer_grouped_parameters,lr = args.learning_rate, momentum = 0.9)
+        optimizer = SGD(optimizer_grouped_parameters, lr=args.learning_rate,
+                        momentum=0.9)
     elif args.optimizer == 'sgd_c':
-        optimizer = SGD_C(optimizer_grouped_parameters,lr = args.learning_rate , decay=args.optdecay, topC = args.topC)
+        optimizer = SGD_C(optimizer_grouped_parameters, lr=args.learning_rate,
+                          decay=args.optdecay, topC=args.topC)
     elif args.optimizer == 'sgdm_c':
-        optimizer = SGD_C(optimizer_grouped_parameters,lr = args.learning_rate, momentum = 0.9, decay=args.optdecay, topC = args.topC)
+        optimizer = SGD_C(optimizer_grouped_parameters, lr=args.learning_rate,
+                          momentum=0.9, decay=args.optdecay,
+                          topC=args.topC)
     elif args.optimizer == 'adam_c':
-        optimizer = Adam_C(optimizer_grouped_parameters, lr = args.learning_rate, decay=args.optdecay, topC = args.topC)
+        optimizer = Adam_C(optimizer_grouped_parameters, lr=args.learning_rate,
+                           decay=args.optdecay, topC=args.topC)
     elif args.optimizer == 'adam':
-        optimizer = Adam(optimizer_grouped_parameters, lr = args.learning_rate)
+        optimizer = Adam(optimizer_grouped_parameters, lr=args.learning_rate)
     elif args.optimizer == 'rmsprop':
-        optimizer = RMSprop(optimizer_grouped_parameters, lr = args.learning_rate)
+        optimizer = RMSprop(optimizer_grouped_parameters, lr=args.learning_rate)
     elif args.optimizer == 'rmsprop_c':
-        optimizer = RMSprop_C(optimizer_grouped_parameters, lr = args.learning_rate, decay=args.optdecay, kappa = 1., topC = args.topC)
-    #lr=args.learning_rate, eps=args.adam_epsilon)
+        optimizer = RMSprop_C(optimizer_grouped_parameters, lr=args.learning_rate,
+                              decay=args.optdecay, kappa=1.,
+                              topC=args.topC)
+    # lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
     )
 
     # Check if saved optimizer or scheduler states exist
     if (
-        args.model_name_or_path
-        and os.path.isfile(os.path.join(args.model_name_or_path, "optimizer.pt"))
-        and os.path.isfile(os.path.join(args.model_name_or_path, "scheduler.pt"))
+            args.model_name_or_path
+            and os.path.isfile(os.path.join(args.model_name_or_path, "optimizer.pt"))
+            and os.path.isfile(os.path.join(args.model_name_or_path, "scheduler.pt"))
     ):
         # Load in optimizer and scheduler states
-        optimizer.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "optimizer.pt")))
-        scheduler.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "scheduler.pt")))
+        optimizer.load_state_dict(
+            torch.load(os.path.join(args.model_name_or_path, "optimizer.pt")))
+        scheduler.load_state_dict(
+            torch.load(os.path.join(args.model_name_or_path, "scheduler.pt")))
 
     if args.fp16:
         try:
             from apex import amp
         except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
+            raise ImportError("Please install apex from "
+                              "https://www.github.com/nvidia/apex to use fp16 "
+                              "training.")
+        model, optimizer = amp.initialize(model, optimizer,
+                                          opt_level=args.fp16_opt_level)
 
     # multi-gpu training (should be after apex fp16 initialization)
     if args.n_gpu > 1:
@@ -299,14 +324,16 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
     # Distributed training (should be after apex fp16 initialization)
     if args.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True
+            model, device_ids=[args.local_rank], output_device=args.local_rank,
+            find_unused_parameters=True
         )
 
     # Train!
     logger.info("***** Running training *****")
     logger.info("  Num examples = %d", len(train_dataset))
     logger.info("  Num Epochs = %d", args.num_train_epochs)
-    logger.info("  Instantaneous batch size per GPU = %d", args.per_gpu_train_batch_size)
+    logger.info("  Instantaneous batch size per GPU = %d",
+                args.per_gpu_train_batch_size)
     logger.info(
         "  Total train batch size (w. parallel, distributed & accumulation) = %d",
         args.train_batch_size
@@ -325,13 +352,17 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
             # set global_step to gobal_step of last saved checkpoint from model path
             checkpoint_suffix = args.model_name_or_path.split("-")[-1].split("/")[0]
             global_step = int(checkpoint_suffix)
-            epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps)
-            steps_trained_in_current_epoch = global_step % (len(train_dataloader) // args.gradient_accumulation_steps)
+            epochs_trained = global_step // (
+                    len(train_dataloader) // args.gradient_accumulation_steps)
+            steps_trained_in_current_epoch = global_step % (
+                    len(train_dataloader) // args.gradient_accumulation_steps)
 
-            logger.info("  Continuing training from checkpoint, will skip to saved global_step")
+            logger.info(
+                "  Continuing training from checkpoint, will skip to saved global_step")
             logger.info("  Continuing training from epoch %d", epochs_trained)
             logger.info("  Continuing training from global step %d", global_step)
-            logger.info("  Will skip the first %d steps in the first epoch", steps_trained_in_current_epoch)
+            logger.info("  Will skip the first %d steps in the first epoch",
+                        steps_trained_in_current_epoch)
         except ValueError:
             logger.info("  Starting fine-tuning.")
 
@@ -339,11 +370,11 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
 
     model.zero_grad()
     train_iterator = range(
-        epochs_trained, int(args.num_train_epochs))#, desc="Epoch", disable=args.local_rank not in [-1, 0]
-    #)
+        epochs_trained,
+        int(args.num_train_epochs))
+
     set_seed(args)  # Added here for reproducibility
     for _ in train_iterator:
-        #epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(train_dataloader):
 
             # Skip past any already trained steps if resuming training
@@ -357,7 +388,8 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
             labels = labels.to(args.device)
             model.train()
             outputs = model(inputs, labels=labels)
-            loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
+            loss = outputs[
+                0]  # model outputs are always tuple in transformers (see doc)
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -369,37 +401,40 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
                     scaled_loss.backward()
             else:
                 loss.backward()
-            wandb.log({'Training Loss':loss.item()})
+            wandb.log({'Training Loss': loss.item()})
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
-                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
+                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer),
+                                                   args.max_grad_norm)
                 else:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(),
+                                                   args.max_grad_norm)
                 optimizer.step()
                 scheduler.step()  # Update learning rate schedule
                 model.zero_grad()
                 global_step += 1
 
-                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                if args.local_rank in [-1, 0] and args.logging_steps > 0 \
+                        and global_step % args.logging_steps == 0:
                     # Log metrics
-                    if (
-                        args.local_rank == -1 and args.evaluate_during_training
-                    ):  # Only evaluate when single GPU otherwise metrics may not average well
+                    if (args.local_rank == -1 and args.evaluate_during_training):  #
+                        # Only evaluate when single GPU otherwise metrics may not
+                        # average well
                         results = evaluate(args, model, tokenizer, df_trn, df_val)
                         for key, value in results.items():
-                            #tb_writer.add_scalar("eval_{}".format(key), value, global_step)
                             wandb.log({"eval_{}".format(key): value})
-                    #tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
                     wandb.log({"lr": scheduler.get_lr()[0]})
-                    #tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
                     wandb.log({"loss": (tr_loss - logging_loss) / args.logging_steps})
                     logging_loss = tr_loss
 
-                if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
+                if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step\
+                        % args.save_steps == 0:
                     checkpoint_prefix = "checkpoint"
                     # Save model checkpoint
-                    output_dir = os.path.join(args.output_dir, "{}-{}".format(checkpoint_prefix, global_step))
+                    output_dir = os.path.join(args.output_dir,
+                                              "{}-{}".format(checkpoint_prefix,
+                                                             global_step))
                     os.makedirs(output_dir, exist_ok=True)
                     model_to_save = (
                         model.module if hasattr(model, "module") else model
@@ -407,16 +442,20 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
                     model_to_save.save_pretrained(output_dir)
                     tokenizer.save_pretrained(output_dir)
 
-                    #torch.save(args, os.path.join(output_dir, "training_args.bin"))
+                    # torch.save(args, os.path.join(output_dir, "training_args.bin"))
                     logger.info("Saving model checkpoint to %s", output_dir)
 
                     _rotate_checkpoints(args, checkpoint_prefix)
 
-                    torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
-                    torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-                    logger.info("Saving optimizer and scheduler states to %s", output_dir)
+                    torch.save(optimizer.state_dict(),
+                               os.path.join(output_dir, "optimizer.pt"))
+                    torch.save(scheduler.state_dict(),
+                               os.path.join(output_dir, "scheduler.pt"))
+                    logger.info("Saving optimizer and scheduler states to %s",
+                                output_dir)
             gc_v_gt = optimizer.getAnalysis()
-            wandb.log({'gt':gc_v_gt['gt']/gc_v_gt['count'],'gc':gc_v_gt['gc']/gc_v_gt['count']})
+            wandb.log({'gt': gc_v_gt['gt'] / gc_v_gt['count'],
+                       'gc': gc_v_gt['gc'] / gc_v_gt['count']})
             # gradient clipping (off by default)
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
@@ -430,25 +469,31 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
 
     return global_step, tr_loss / global_step
 
+
 # Evaluation of some model
 
-def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, df_trn, df_val, prefix="") -> Dict:
+def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, df_trn,
+             df_val, prefix="") -> Dict:
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_output_dir = args.output_dir
 
-    eval_dataset = load_and_cache_examples(args, tokenizer, df_trn, df_val, evaluate=True)
+    eval_dataset = load_and_cache_examples(args, tokenizer, df_trn, df_val,
+                                           evaluate=True)
     os.makedirs(eval_output_dir, exist_ok=True)
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
+
     # Note that DistributedSampler samples randomly
 
     def collate(examples: List[torch.Tensor]):
         if tokenizer._pad_token is None:
             return pad_sequence(examples, batch_first=True)
-        return pad_sequence(examples, batch_first=True, padding_value=tokenizer.pad_token_id)
+        return pad_sequence(examples, batch_first=True,
+                            padding_value=tokenizer.pad_token_id)
 
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = DataLoader(
-        eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size, collate_fn=collate, drop_last = True
+        eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size,
+        collate_fn=collate, drop_last=True
     )
 
     # multi-gpu evaluate
@@ -463,7 +508,7 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, df_tr
     nb_eval_steps = 0
     model.eval()
 
-    for batch in eval_dataloader:#tqdm(eval_dataloader, desc="Evaluating"):
+    for batch in eval_dataloader:  # tqdm(eval_dataloader, desc="Evaluating"):
         inputs, labels = (batch, batch)
         inputs = inputs.to(args.device)
         labels = labels.to(args.device)
@@ -488,27 +533,32 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, df_tr
 
     return result
 
+
 # Main show runner
 
 def main(config, df_trn, df_val, df_test):
-    args = Args(seed = config['seed'], lr = config['lr'], optimizer = config['optim'], optdecay = config['decay'], topC = config['topC'])
+    args = Args(seed=config['seed'], lr=config['lr'], optimizer=config['optim'],
+                optdecay=config['decay'],
+                topC=config['topC'])
 
     if args.should_continue:
         sorted_checkpoints = _sorted_checkpoints(args)
         if len(sorted_checkpoints) == 0:
-            raise ValueError("Used --should_continue but no checkpoint was found in --output_dir.")
+            raise ValueError(
+                "Used --should_continue but no checkpoint was found in --output_dir.")
         else:
             args.model_name_or_path = sorted_checkpoints[-1]
 
     if (
-        os.path.exists(args.output_dir)
-        and os.listdir(args.output_dir)
-        and args.do_train
-        and not args.overwrite_output_dir
-        and not args.should_continue
+            os.path.exists(args.output_dir)
+            and os.listdir(args.output_dir)
+            and args.do_train
+            and not args.overwrite_output_dir
+            and not args.should_continue
     ):
         raise ValueError(
-            "Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(
+            "Output directory ({}) already exists and is not empty. Use "
+            "--overwrite_output_dir to overcome.".format(
                 args.output_dir
             )
         )
@@ -525,7 +575,8 @@ def main(config, df_trn, df_val, df_test):
         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN,
     )
     logger.warning(
-        "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
+        "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits "
+        "training: %s",
         args.local_rank,
         device,
         args.n_gpu,
@@ -539,10 +590,12 @@ def main(config, df_trn, df_val, df_test):
     config = AutoConfig.from_pretrained(args.config_name)
     if 'roberta' in args.model_type:
         config.is_decoder = True
-    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name, cache_dir=args.cache_dir)
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name,
+                                              cache_dir=args.cache_dir)
 
     if 'roberta' in args.model_type:
-        model = AutoModelForCausalLM.from_pretrained(#AutoModelWithLMHead.from_pretrained(
+        model = AutoModelForCausalLM.from_pretrained(
+            # AutoModelWithLMHead.from_pretrained(
             args.model_name_or_path,
             from_tf=False,
             config=config,
@@ -557,18 +610,22 @@ def main(config, df_trn, df_val, df_test):
         )
 
     model.to(args.device)
-    print('RoBERTa-Base :',sum(p.numel() for p in model.parameters() if p.requires_grad))
-    print(1/0)
+    print('RoBERTa-Base :',
+          sum(p.numel() for p in model.parameters() if p.requires_grad))
+    print(1 / 0)
     logger.info("Training/evaluation parameters %s", args)
 
     # Training
     if args.do_train:
-        train_dataset = load_and_cache_examples(args, tokenizer, df_trn, df_val, evaluate=False)
+        train_dataset = load_and_cache_examples(args, tokenizer, df_trn, df_val,
+                                                evaluate=False)
 
-        global_step, tr_loss = train(args, train_dataset, model, tokenizer, df_trn, df_val,)
+        global_step, tr_loss = train(args, train_dataset, model, tokenizer, df_trn,
+                                     df_val, )
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
-    # Saving best-practices: if you use save_pretrained for the model and tokenizer, you can reload them using from_pretrained()
+    # Saving best-practices: if you use save_pretrained for the model and tokenizer,
+    # you can reload them using from_pretrained()
     if args.do_train:
         # Create output directory if needed
         os.makedirs(args.output_dir, exist_ok=True)
@@ -583,10 +640,11 @@ def main(config, df_trn, df_val, df_test):
         tokenizer.save_pretrained(args.output_dir)
 
         # Good practice: save your training arguments together with the trained model
-        #torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
+        # torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = AutoModelForCausalLM.from_pretrained(args.output_dir)#AutoModelWithLMHead.from_pretrained(args.output_dir)
+        model = AutoModelForCausalLM.from_pretrained(
+            args.output_dir)  # AutoModelWithLMHead.from_pretrained(args.output_dir)
         tokenizer = AutoTokenizer.from_pretrained(args.output_dir)
         model.to(args.device)
 
@@ -596,15 +654,19 @@ def main(config, df_trn, df_val, df_test):
         checkpoints = [args.output_dir]
         if args.eval_all_checkpoints:
             checkpoints = list(
-                os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
+                os.path.dirname(c) for c in sorted(
+                    glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
             )
-            logging.getLogger("transformers.modeling_utils").setLevel(logging.WARN)  # Reduce logging
+            logging.getLogger("transformers.modeling_utils").setLevel(
+                logging.WARN)  # Reduce logging
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
         for checkpoint in checkpoints:
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
-            prefix = checkpoint.split("/")[-1] if checkpoint.find("checkpoint") != -1 else ""
+            prefix = checkpoint.split("/")[-1] if checkpoint.find(
+                "checkpoint") != -1 else ""
 
-            model = AutoModelForCausalLM.from_pretrained(checkpoint)#AutoModelWithLMHead.from_pretrained(checkpoint)
+            model = AutoModelForCausalLM.from_pretrained(
+                checkpoint)  # AutoModelWithLMHead.from_pretrained(checkpoint)
             model.to(args.device)
             result = evaluate(args, model, tokenizer, df_trn, df_test, prefix=prefix)
             result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
@@ -612,7 +674,8 @@ def main(config, df_trn, df_val, df_test):
 
     return results
 
-def HyperEvaluate(config):
+
+def hyper_evaluate(config):
     ## Loading the data
     trn_df = pd.read_csv('./data/multiwoz/multiwoz_trans_train.csv')
     val_df = pd.read_csv('./data/multiwoz/multiwoz_trans_valid.csv')
@@ -620,26 +683,26 @@ def HyperEvaluate(config):
     trn_df = trn_df.dropna()
     val_df = val_df.dropna()
     test_df = test_df.dropna()
-    #trn_df, val_df = train_test_split(df, test_size = 0.2)
+    # trn_df, val_df = train_test_split(df, test_size = 0.2)
     main(config, trn_df, val_df, test_df)
 
 
 myparser = argparse.ArgumentParser()
 
-myparser.add_argument('--first_launch',action='store_true')
-myparser.add_argument('--is_slurm',action='store_false')
-myargs=myparser.parse_args()
+myparser.add_argument('--first_launch', action='store_true')
+myparser.add_argument('--is_slurm', action='store_false')
+myargs = myparser.parse_args()
 
 best_hyperparameters = None
 
 PARAM_GRID = list(product(
-    [100],#, 101, 102, 103, 104], # seeds
-    ['sgd_c'], # optimizer
+    [100],  # , 101, 102, 103, 104], # seeds
+    ['sgd_c'],  # optimizer
     [0.1],  # lr
     [0.7],  # decay
-    [5]#,10,20,50]  # topC
-#    ['none'],         # aggr
-#    [1.0]               # kappa
+    [5]  # ,10,20,50]  # topC
+    #    ['none'],         # aggr
+    #    [1.0]               # kappa
 ))
 
 h_param_list = []
@@ -675,11 +738,11 @@ if myargs.is_slurm:
     # run by submitit
     d = datetime.today()
     exp_dir = (
-        Path("./dumps/")
-        / "projects"
-        / "crit-grad"
-        / "multiwoz"
-        / f"{d.strftime('%Y-%m-%d')}_rand_eval_multiwoz_roberta"
+            Path("./dumps/")
+            / "projects"
+            / "crit-grad"
+            / "multiwoz"
+            / f"{d.strftime('%Y-%m-%d')}_rand_eval_multiwoz_roberta"
     )
     exp_dir.mkdir(parents=True, exist_ok=True)
     submitit_logdir = exp_dir / "submitit_logs"
@@ -692,10 +755,10 @@ if myargs.is_slurm:
         slurm_additional_parameters={"account": "rrg-bengioy-ad"},
         tasks_per_node=num_gpus,
         cpus_per_task=workers_per_gpu,
-        slurm_mem="16G",#16G
+        slurm_mem="16G",  # 16G
         slurm_array_parallelism=50,
     )
-    job = executor.map_array(HyperEvaluate,h_param_list)
+    job = executor.map_array(hyper_evaluate, h_param_list)
     print('Jobs submitted!')
 
 

@@ -1,11 +1,14 @@
-from experiments.multiwoz_lstm import utils as delex
 import json
-from utils import normalize
-import sqlite3
 import os
 import random
-from experiments.multiwoz_lstm.utils import BLEUScorer
+import sqlite3
+
 from nltk.translate.bleu_score import sentence_bleu as bleu_score
+
+from experiments.multiwoz_lstm import utils as delex
+from experiments.multiwoz_lstm.utils import BLEUScorer
+from utils import normalize
+
 
 class BaseEvaluator(object):
     def initialize(self):
@@ -42,66 +45,18 @@ class BLEUScorer(object):
         clip_count = [0, 0, 0, 0]
         r = 0
         c = 0
-        weights = [0.5, 0.5]#, 0.25, 0.25]
+        weights = [0.5, 0.5]  # , 0.25, 0.25]
         bleu = 0.0
         # accumulate ngram statistics
         for hyps, refs in zip(hypothesis, corpus):
-            # if type(hyps[0]) is list:
-            #    hyps = [hyp.split() for hyp in hyps[0]]
-            # else:
-            #    hyps = [hyp.split() for hyp in hyps]
-
-            # refs = [ref.split() for ref in refs]
-            #hyps =[hyps]
-            bleu += bleu_score([hyps[0].split()], refs[0].split(), (0.5,0.5))*100.
-            #break
-            # Shawn's evaluation
-            # refs[0] = [u'GO_'] + refs[0] + [u'EOS_']
-            # hyps[0] = [u'GO_'] + hyps[0] + [u'EOS_']
-            #if False:
-#             for idx, hyp in enumerate(hyps):
-#                 for i in range(2):
-                     # accumulate ngram counts
-#                     hypcnts = Counter(ngrams(hyp, i + 1))
-#                     cnt = sum(hypcnts.values())
-#                     count[i] += cnt
-
-                     # compute clipped counts
-#                    max_counts = {}
-#                     for ref in refs:
-#                         refcnts = Counter(ngrams(ref, i + 1))
-#                         for ng in hypcnts:
-#                             max_counts[ng] = max(max_counts.get(ng, 0), refcnts[ng])
-#                     clipcnt = dict((ng, min(count, max_counts[ng])) \
-#                                    for ng, count in hypcnts.items())
-#                     clip_count[i] += sum(clipcnt.values())
-
-                # accumulate r & c
-#                 bestmatch = [1000, 1000]
-#                 for ref in refs:
-#                     if bestmatch[0] == 0: break
-#                     diff = abs(len(ref) - len(hyp))
-#                     if diff < bestmatch[0]:
-#                         bestmatch[0] = diff
-#                         bestmatch[1] = len(ref)
-#                 r += bestmatch[1]
-#                 c += len(hyp)
-#                 if n == 1:
-#                     break
-        # computing bleu score
-#        p0 = 1e-7
-#        bp = 1 if c > r else math.exp(1 - float(r) / float(c))
-#        p_ns = [float(clip_count[i]) / float(count[i] + p0) + p0 \
-#                for i in range(2)]
-#        s = math.fsum(w * math.log(p_n) \
-#                      for w, p_n in zip(weights, p_ns) if p_n)
-#        bleu = bp * math.exp(s)
-        return bleu/len(hypothesis)
+            bleu += bleu_score([hyps[0].split()], refs[0].split(), (0.5, 0.5)) * 100.
+        return bleu / len(hypothesis)
 
 
 class MultiWozDB(object):
     # loading databases
-    domains = ['restaurant', 'hotel', 'attraction', 'train', 'taxi', 'hospital']  # , 'police']
+    domains = ['restaurant', 'hotel', 'attraction', 'train', 'taxi',
+               'hospital']  # , 'police']
     dbs = {}
     CUR_DIR = os.path.dirname(__file__)
 
@@ -122,7 +77,8 @@ class MultiWozDB(object):
 
         flag = True
         for key, val in items:
-            if val == "" or val == "dontcare" or val == 'not mentioned' or val == "don't care" or val == "dont care" or val == "do n't care":
+            if val == "" or val == "dontcare" or val == 'not mentioned' or \
+                    val == "don't care" or val == "dont care" or val == "do n't care":
                 pass
             else:
                 if flag:
@@ -170,35 +126,36 @@ class MultiWozEvaluator(BaseEvaluator):
         goal[domain] = {}
         goal[domain] = {'informable': [], 'requestable': [], 'booking': []}
         if 'info' in d['goal'][domain]:
-        # if d['goal'][domain].has_key('info'):
+            # if d['goal'][domain].has_key('info'):
             if domain == 'train':
                 # we consider dialogues only where train had to be booked!
                 if 'book' in d['goal'][domain]:
-                # if d['goal'][domain].has_key('book'):
+                    # if d['goal'][domain].has_key('book'):
                     goal[domain]['requestable'].append('reference')
                 if 'reqt' in d['goal'][domain]:
-                # if d['goal'][domain].has_key('reqt'):
+                    # if d['goal'][domain].has_key('reqt'):
                     if 'trainID' in d['goal'][domain]['reqt']:
                         goal[domain]['requestable'].append('id')
             else:
                 if 'reqt' in d['goal'][domain]:
-                # if d['goal'][domain].has_key('reqt'):
+                    # if d['goal'][domain].has_key('reqt'):
                     for s in d['goal'][domain]['reqt']:  # addtional requests:
                         if s in ['phone', 'address', 'postcode', 'reference', 'id']:
                             # ones that can be easily delexicalized
                             goal[domain]['requestable'].append(s)
                 if 'book' in d['goal'][domain]:
-                # if d['goal'][domain].has_key('book'):
+                    # if d['goal'][domain].has_key('book'):
                     goal[domain]['requestable'].append("reference")
 
             goal[domain]["informable"] = d['goal'][domain]['info']
             if 'book' in d['goal'][domain]:
-            # if d['goal'][domain].has_key('book'):
+                # if d['goal'][domain].has_key('book'):
                 goal[domain]["booking"] = d['goal'][domain]['book']
 
         return goal
 
-    def _evaluateGeneratedDialogue(self, dialog, goal, realDialogue, real_requestables, soft_acc=False):
+    def _evaluateGeneratedDialogue(self, dialog, goal, realDialogue, real_requestables,
+                                   soft_acc=False):
         """Evaluates the dialogue created by the model.
         First we load the user goal of the dialogue, then for each turn
         generated by the system we look for key-words.
@@ -223,7 +180,8 @@ class MultiWozEvaluator(BaseEvaluator):
                 if '[' + domain + '_name]' in sent_t or '_id' in sent_t:
                     if domain in ['restaurant', 'hotel', 'attraction', 'train']:
                         # HERE YOU CAN PUT YOUR BELIEF STATE ESTIMATION
-                        venues = self.db.queryResultVenues(domain, realDialogue['log'][t * 2 + 1])
+                        venues = self.db.queryResultVenues(domain, realDialogue['log'][
+                            t * 2 + 1])
 
                         # if venue has changed
                         if len(venue_offered[domain]) == 0 and venues:
@@ -292,7 +250,9 @@ class MultiWozEvaluator(BaseEvaluator):
             #             venue_offered[domain] = '[' + domain + '_name]'
 
             # if id was not requested but train was found we dont want to override it to check if we booked the right train
-            if domain == 'train' and (not venue_offered[domain] and 'id' not in goal['train']['requestable']):
+            if domain == 'train' and (
+                    not venue_offered[domain] and 'id' not in goal['train'][
+                'requestable']):
                 venue_offered[domain] = '[' + domain + '_name]'
 
         """
@@ -303,7 +263,8 @@ class MultiWozEvaluator(BaseEvaluator):
         The dialogue is successful if that's the case for all domains.
         """
         # HARD EVAL
-        stats = {'restaurant': [0, 0, 0], 'hotel': [0, 0, 0], 'attraction': [0, 0, 0], 'train': [0, 0, 0],
+        stats = {'restaurant': [0, 0, 0], 'hotel': [0, 0, 0], 'attraction': [0, 0, 0],
+                 'train': [0, 0, 0],
                  'taxi': [0, 0, 0],
                  'hospital': [0, 0, 0], 'police': [0, 0, 0]}
 
@@ -313,11 +274,15 @@ class MultiWozEvaluator(BaseEvaluator):
         for domain in goal.keys():
             match_stat = 0
             if domain in ['restaurant', 'hotel', 'attraction', 'train']:
-                goal_venues = self.db.queryResultVenues(domain, goal[domain]['informable'], real_belief=True)
-                if type(venue_offered[domain]) is str and '_name' in venue_offered[domain]:
+                goal_venues = self.db.queryResultVenues(domain,
+                                                        goal[domain]['informable'],
+                                                        real_belief=True)
+                if type(venue_offered[domain]) is str and '_name' in venue_offered[
+                    domain]:
                     match += 1
                     match_stat = 1
-                elif len(venue_offered[domain]) > 0 and venue_offered[domain][0] in goal_venues:
+                elif len(venue_offered[domain]) > 0 and venue_offered[domain][
+                    0] in goal_venues:
                     match += 1
                     match_stat = 1
             else:
@@ -329,7 +294,7 @@ class MultiWozEvaluator(BaseEvaluator):
             stats[domain][2] = 1
 
         if soft_acc:
-            match = float(match)/len(goal.keys())
+            match = float(match) / len(goal.keys())
         else:
             if match == len(goal.keys()):
                 match = 1.0
@@ -359,7 +324,7 @@ class MultiWozEvaluator(BaseEvaluator):
 
             # final eval
             if soft_acc:
-                success = float(success)/len(real_requestables)
+                success = float(success) / len(real_requestables)
             else:
                 if success >= len(real_requestables):
                     success = 1
@@ -373,7 +338,8 @@ class MultiWozEvaluator(BaseEvaluator):
         """Evaluation of the real dialogue.
         First we loads the user goal and then go through the dialogue history.
         Similar to evaluateGeneratedDialogue above."""
-        domains = ['restaurant', 'hotel', 'attraction', 'train', 'taxi', 'hospital', 'police']
+        domains = ['restaurant', 'hotel', 'attraction', 'train', 'taxi', 'hospital',
+                   'police']
         requestables = ['phone', 'address', 'postcode', 'reference', 'id']
 
         # get the list of domains in the goal
@@ -394,7 +360,8 @@ class MultiWozEvaluator(BaseEvaluator):
             real_requestables[domain] = goal[domain]['requestable']
 
         # iterate each turn
-        m_targetutt = [turn['text'] for idx, turn in enumerate(dialog['log']) if idx % 2 == 1]
+        m_targetutt = [turn['text'] for idx, turn in enumerate(dialog['log']) if
+                       idx % 2 == 1]
         for t in range(len(m_targetutt)):
             for domain in domains_in_goal:
                 sent_t = m_targetutt[t]
@@ -402,7 +369,8 @@ class MultiWozEvaluator(BaseEvaluator):
                 if domain + '_name' in sent_t or '_id' in sent_t:
                     if domain in ['restaurant', 'hotel', 'attraction', 'train']:
                         # HERE YOU CAN PUT YOUR BELIEF STATE ESTIMATION
-                        venues = self.db.queryResultVenues(domain, dialog['log'][t * 2 + 1])
+                        venues = self.db.queryResultVenues(domain,
+                                                           dialog['log'][t * 2 + 1])
 
                         # if venue has changed
                         if len(venue_offered[domain]) == 0 and venues:
@@ -424,16 +392,19 @@ class MultiWozEvaluator(BaseEvaluator):
                     if requestable == 'reference':
                         if domain + '_reference' in sent_t:
                             if 'restaurant_reference' in sent_t:
-                                if dialog['log'][t * 2]['db_pointer'][-5] == 1:  # if pointer was allowing for that?
+                                if dialog['log'][t * 2]['db_pointer'][
+                                    -5] == 1:  # if pointer was allowing for that?
                                     provided_requestables[domain].append('reference')
 
                             elif 'hotel_reference' in sent_t:
-                                if dialog['log'][t * 2]['db_pointer'][-3] == 1:  # if pointer was allowing for that?
+                                if dialog['log'][t * 2]['db_pointer'][
+                                    -3] == 1:  # if pointer was allowing for that?
                                     provided_requestables[domain].append('reference')
 
                                     # return goal, 0, match, real_requestables
                             elif 'train_reference' in sent_t:
-                                if dialog['log'][t * 2]['db_pointer'][-1] == 1:  # if pointer was allowing for that?
+                                if dialog['log'][t * 2]['db_pointer'][
+                                    -1] == 1:  # if pointer was allowing for that?
                                     provided_requestables[domain].append('reference')
 
                             else:
@@ -456,11 +427,14 @@ class MultiWozEvaluator(BaseEvaluator):
                 venue_offered[domain] = '[' + domain + '_name]'
 
             # if id was not requested but train was found we dont want to override it to check if we booked the right train
-            if domain == 'train' and (not venue_offered[domain] and 'id' not in goal['train']['requestable']):
+            if domain == 'train' and (
+                    not venue_offered[domain] and 'id' not in goal['train'][
+                'requestable']):
                 venue_offered[domain] = '[' + domain + '_name]'
 
         # HARD (0-1) EVAL
-        stats = {'restaurant': [0, 0, 0], 'hotel': [0, 0, 0], 'attraction': [0, 0, 0], 'train': [0, 0, 0],
+        stats = {'restaurant': [0, 0, 0], 'hotel': [0, 0, 0], 'attraction': [0, 0, 0],
+                 'train': [0, 0, 0],
                  'taxi': [0, 0, 0],
                  'hospital': [0, 0, 0], 'police': [0, 0, 0]}
 
@@ -469,12 +443,16 @@ class MultiWozEvaluator(BaseEvaluator):
         for domain in goal.keys():
             match_stat = 0
             if domain in ['restaurant', 'hotel', 'attraction', 'train']:
-                goal_venues = self.db.queryResultVenues(domain, dialog['goal'][domain]['info'], real_belief=True)
+                goal_venues = self.db.queryResultVenues(domain,
+                                                        dialog['goal'][domain]['info'],
+                                                        real_belief=True)
                 # print(goal_venues)
-                if type(venue_offered[domain]) is str and '_name' in venue_offered[domain]:
+                if type(venue_offered[domain]) is str and '_name' in venue_offered[
+                    domain]:
                     match += 1
                     match_stat = 1
-                elif len(venue_offered[domain]) > 0 and venue_offered[domain][0] in goal_venues:
+                elif len(venue_offered[domain]) > 0 and venue_offered[domain][
+                    0] in goal_venues:
                     match += 1
                     match_stat = 1
 
@@ -534,17 +512,21 @@ class MultiWozEvaluator(BaseEvaluator):
         successes, matches = 0, 0
         total = 0
 
-        gen_stats = {'restaurant': [0, 0, 0], 'hotel': [0, 0, 0], 'attraction': [0, 0, 0], 'train': [0, 0, 0],
+        gen_stats = {'restaurant': [0, 0, 0], 'hotel': [0, 0, 0],
+                     'attraction': [0, 0, 0], 'train': [0, 0, 0],
                      'taxi': [0, 0, 0],
                      'hospital': [0, 0, 0], 'police': [0, 0, 0]}
-        sng_gen_stats = {'restaurant': [0, 0, 0], 'hotel': [0, 0, 0], 'attraction': [0, 0, 0], 'train': [0, 0, 0],
+        sng_gen_stats = {'restaurant': [0, 0, 0], 'hotel': [0, 0, 0],
+                         'attraction': [0, 0, 0], 'train': [0, 0, 0],
                          'taxi': [0, 0, 0], 'hospital': [0, 0, 0], 'police': [0, 0, 0]}
 
         for filename, dial in dialogues.items():
             data = delex_dialogues[filename]
-            goal, success, match, requestables, _ = self._evaluateRealDialogue(data, filename)
-            success, match, stats = self._evaluateGeneratedDialogue(dial, goal, data, requestables,
-                                                                    soft_acc=mode =='soft')
+            goal, success, match, requestables, _ = self._evaluateRealDialogue(data,
+                                                                               filename)
+            success, match, stats = self._evaluateGeneratedDialogue(dial, goal, data,
+                                                                    requestables,
+                                                                    soft_acc=mode == 'soft')
 
             successes += success
             matches += match
@@ -571,7 +553,7 @@ class MultiWozEvaluator(BaseEvaluator):
                 model_turns, corpus_turns = [], []
                 for idx, turn in enumerate(data['sys']):
                     corpus_turns.append([turn])
-#                    print(turn)
+                #                    print(turn)
                 for turn in dialogues[dialogue]:
                     model_turns.append([turn])
 
@@ -579,21 +561,23 @@ class MultiWozEvaluator(BaseEvaluator):
                     corpus.extend(corpus_turns)
                     model_corpus.extend(model_turns)
                 else:
-                    raise('Wrong amount of turns')
+                    raise ('Wrong amount of turns')
 
             blue_score = bscorer.score(model_corpus, corpus)
         else:
             blue_score = 0.
 
         report = ""
-        report += '{} Corpus Matches : {:2.2f}%'.format(mode, (matches / float(total) * 100)) + "\n"
-        report += '{} Corpus Success : {:2.2f}%'.format(mode, (successes / float(total) * 100)) + "\n"
+        report += '{} Corpus Matches : {:2.2f}%'.format(mode, (
+                matches / float(total) * 100)) + "\n"
+        report += '{} Corpus Success : {:2.2f}%'.format(mode, (
+                successes / float(total) * 100)) + "\n"
         report += '{} Corpus BLEU : {:2.2f}%'.format(mode, blue_score) + "\n"
         report += 'Total number of dialogues: %s ' % total
 
         print(report)
 
-        return blue_score, successes/float(total), matches/float(total)
+        return blue_score, successes / float(total), matches / float(total)
 
 
 if __name__ == '__main__':

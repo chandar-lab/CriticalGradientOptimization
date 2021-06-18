@@ -25,7 +25,4 @@ Utils_/
 Figures/*
 /utils/
 /venv/
-*train2.py
-*train3.py
-*train4.py
 */Histograms/*

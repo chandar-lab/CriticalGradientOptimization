@@ -4,18 +4,23 @@ import glob
 import os
 import random
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--comet_api", type=str, default='')
     parser.add_argument("--comet_workspace", type=str, default='koustuvs')
     parser.add_argument("--comet_project", type=str, default='compositionality-nli')
-    parser.add_argument('--loc', type=str, default='dataset/compositionality/quantifiers/koustuv/cmb/')
-    parser.add_argument('--models', type=str, default='InferSent,BLSTMprojEncoder,BGRUlastEncoder,InnerAttentionMILAEncoder,InnerAttentionYANGEncoder,InnerAttentionNAACLEncoder,ConvNetEncoder,LSTMEncoder')
-    parser.add_argument('--local', action='store_true', help="If true, run on machines not on slurm")
-    parser.add_argument('--gpus',type=str, default='0', help='works in local, run jobs on these gpus')
-    parser.add_argument('--only', type=str, default='', help='run only these experiment headers')
-    parser.add_argument('--stdout', type=str, default='std_outputs', help='folder to store std outputs')
+    parser.add_argument('--loc', type=str,
+                        default='dataset/compositionality/quantifiers/koustuv/cmb/')
+    parser.add_argument('--models', type=str,
+                        default='InferSent,BLSTMprojEncoder,BGRUlastEncoder,InnerAttentionMILAEncoder,InnerAttentionYANGEncoder,InnerAttentionNAACLEncoder,ConvNetEncoder,LSTMEncoder')
+    parser.add_argument('--local', action='store_true',
+                        help="If true, run on machines not on slurm")
+    parser.add_argument('--gpus', type=str, default='0',
+                        help='works in local, run jobs on these gpus')
+    parser.add_argument('--only', type=str, default='',
+                        help='run only these experiment headers')
+    parser.add_argument('--stdout', type=str, default='std_outputs',
+                        help='folder to store std outputs')
     parser.add_argument('--seed', type=int, default=1111, help='seed value')
 
     args = parser.parse_args()
@@ -30,7 +35,7 @@ if __name__ == '__main__':
     folders = glob.glob(args.loc + '*/')
     print("Found {} folders".format(len(folders)))
     ct = 0
-    run_flnames = {gpu:[] for gpu in gpus}
+    run_flnames = {gpu: [] for gpu in gpus}
     for folder in folders:
         print("Directory : {}".format(folder))
         if len(args.only) > 0:
@@ -75,8 +80,10 @@ if __name__ == '__main__':
             std_output_folder = os.path.join(exp_folder, args.stdout)
             if not os.path.exists(std_output_folder):
                 os.mkdir(std_output_folder)
-            output_file = os.path.join(std_output_folder,'{}_{}.out'.format(base_path, model))
-            run_file += pre + "python train_nli.py --nlipath {} --encoder_type {} --optimizer adam,lr=0.001 --lrshrink 0.9 --enc_lstm_dim 300 --word_emb_type normal --seed {} --comet_apikey $COMET_API --comet_workspace $COMET_WORKSPACE --comet_project $COMET_PROJECT > {}\n".format(folder, model, args.seed, output_file)
+            output_file = os.path.join(std_output_folder,
+                                       '{}_{}.out'.format(base_path, model))
+            run_file += pre + "python train_nli.py --nlipath {} --encoder_type {} --optimizer adam,lr=0.001 --lrshrink 0.9 --enc_lstm_dim 300 --word_emb_type normal --seed {} --comet_apikey $COMET_API --comet_workspace $COMET_WORKSPACE --comet_project $COMET_PROJECT > {}\n".format(
+                folder, model, args.seed, output_file)
             ct += 1
         run_file += "\n"
 
@@ -97,11 +104,6 @@ if __name__ == '__main__':
                 meta_file += "sbatch {}\n".format(rf)
             else:
                 meta_file += "./{}\n".format(rf)
-        with open('meta_run_{}.sh'.format(gpu),'a') as fp:
+        with open('meta_run_{}.sh'.format(gpu), 'a') as fp:
             fp.write(meta_file)
     print("Number of experiments to run : {}".format(ct))
-
-
-
-
-

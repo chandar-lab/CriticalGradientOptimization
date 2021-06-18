@@ -7,7 +7,6 @@ class DefaultPolicy(nn.Module):
         super(DefaultPolicy, self).__init__()
         self.hidden_size = hidden_size
 
-
         self.W_u = nn.Linear(hidden_size, hidden_size_pol, bias=False).to('cuda')
         self.W_bs = nn.Linear(bs_size, hidden_size_pol, bias=False).to('cuda')
         self.W_db = nn.Linear(db_size, hidden_size_pol, bias=False).to('cuda')
@@ -19,11 +18,11 @@ class DefaultPolicy(nn.Module):
             hidden = encodings.to('cuda')
 
         # Network based
-        output = self.W_u(hidden[0]) + self.W_db(db_tensor.to('cuda')) + self.W_bs(bs_tensor.to('cuda'))
+        output = self.W_u(hidden[0]) + self.W_db(db_tensor.to('cuda')) + self.W_bs(
+            bs_tensor.to('cuda'))
         output = torch.tanh(output)
 
         if isinstance(encodings, tuple):  # return LSTM tuple
             return (output.unsqueeze(0), encodings[1])
         else:
             return output.unsqueeze(0)
-

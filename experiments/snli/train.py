@@ -66,7 +66,8 @@ def trainepoch(nli_net, train_iter, optimizer, loss_fn, epoch, params):
         # prepare batch
         s1_batch, s1_len = batch.Sentence1
         s2_batch, s2_len = batch.Sentence2
-        s1_batch, s2_batch = Variable(s1_batch.to(device)), Variable(s2_batch.to(device))
+        s1_batch, s2_batch = Variable(s1_batch.to(device)), Variable(
+            s2_batch.to(device))
         tgt_batch = batch.Label.to(device)
         k = s1_batch.size(1)  # actual batch size
         total_samples += k
@@ -108,7 +109,8 @@ def trainepoch(nli_net, train_iter, optimizer, loss_fn, epoch, params):
 
         if total_norm > params.max_norm:
             shrink_factor = params.max_norm / total_norm
-        current_lr = optimizer.param_groups[0]['lr']  # current lr (no external "lr", for adam)
+        current_lr = optimizer.param_groups[0][
+            'lr']  # current lr (no external "lr", for adam)
         optimizer.param_groups[0]['lr'] = current_lr * shrink_factor  # just for update
 
         # optimizer step
@@ -116,11 +118,12 @@ def trainepoch(nli_net, train_iter, optimizer, loss_fn, epoch, params):
         optimizer.param_groups[0]['lr'] = current_lr
 
         if len(all_costs) == 100:
-            logs.append('{0} ; loss {1} ; sentence/s {2} ; words/s {3} ; accuracy train : {4}'.format(
-                (i) * params.batch_size, round(np.mean(all_costs), 2),
-                int(len(all_costs) * params.batch_size / (time.time() - last_time)),
-                int(words_count * 1.0 / (time.time() - last_time)),
-                round(100. * correct / ((i + 1) * params.batch_size), 2)))
+            logs.append(
+                '{0} ; loss {1} ; sentence/s {2} ; words/s {3} ; accuracy train : {4}'.format(
+                    (i) * params.batch_size, round(np.mean(all_costs), 2),
+                    int(len(all_costs) * params.batch_size / (time.time() - last_time)),
+                    int(words_count * 1.0 / (time.time() - last_time)),
+                    round(100. * correct / ((i + 1) * params.batch_size), 2)))
             print(logs[-1])
             last_time = time.time()
             words_count = 0
@@ -131,7 +134,8 @@ def trainepoch(nli_net, train_iter, optimizer, loss_fn, epoch, params):
     return train_acc, S
 
 
-def evaluate(nli_net, valid_iter, optimizer, epoch, train_config, params, eval_type='valid', test_folder=None,
+def evaluate(nli_net, valid_iter, optimizer, epoch, train_config, params,
+             eval_type='valid', test_folder=None,
              inv_label=None, itos_vocab=None, final_eval=False):
     nli_net.eval()
     correct = 0.
@@ -147,7 +151,8 @@ def evaluate(nli_net, valid_iter, optimizer, epoch, train_config, params, eval_t
         # prepare batch
         s1_batch, s1_len = batch.Sentence1
         s2_batch, s2_len = batch.Sentence2
-        s1_batch, s2_batch = Variable(s1_batch.to(device)), Variable(s2_batch.to(device))
+        s1_batch, s2_batch = Variable(s1_batch.to(device)), Variable(
+            s2_batch.to(device))
         tgt_batch = batch.Label.to(device)
         total_samples += s1_batch.size(1)
 
@@ -161,9 +166,11 @@ def evaluate(nli_net, valid_iter, optimizer, epoch, train_config, params, eval_t
             for b_index in range(len(batch)):
                 test_prediction = inv_label[pred[b_index].item()]
                 s1 = ' '.join([itos_vocab[idx.item()] for idx in
-                               batch.Sentence1[0][:batch.Sentence1[1][b_index], b_index]]).replace('Ġ', ' ')
+                               batch.Sentence1[0][:batch.Sentence1[1][b_index],
+                               b_index]]).replace('Ġ', ' ')
                 s2 = ' '.join([itos_vocab[idx.item()] for idx in
-                               batch.Sentence2[0][:batch.Sentence2[1][b_index], b_index]]).replace('Ġ', ' ')
+                               batch.Sentence2[0][:batch.Sentence2[1][b_index],
+                               b_index]]).replace('Ġ', ' ')
                 target = inv_label[batch.Label[b_index]]
                 res_file = os.path.join(test_folder, 'samples.txt')
                 lock = FileLock(os.path.join(test_folder, 'samples.txt.new.lock'))
@@ -190,7 +197,8 @@ def evaluate(nli_net, valid_iter, optimizer, epoch, train_config, params, eval_t
             train_config['val_acc_best'] = eval_acc
         else:
             if 'sgd' in params.optimizer:
-                optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] / params.lrshrink
+                optimizer.param_groups[0]['lr'] = optimizer.param_groups[0][
+                                                      'lr'] / params.lrshrink
                 print('Shrinking lr by : {0}. New lr = {1}'
                       .format(params.lrshrink,
                               optimizer.param_groups[0]['lr']))
@@ -203,13 +211,14 @@ def evaluate(nli_net, valid_iter, optimizer, epoch, train_config, params, eval_t
     return eval_acc, optimizer, train_config
 
 
-def HyperEvaluate(config):
+def hyper_evaluate(config):
     print(config)
     parser = argparse.ArgumentParser()
     parser.add_argument('--node-ip-address=')  # ,192.168.2.19
     parser.add_argument('--node-manager-port=')
     parser.add_argument('--object-store-name=')
-    parser.add_argument('--raylet-name=')  # /tmp/ray/session_2020-07-15_12-00-45_292745_38156/sockets/raylet
+    parser.add_argument(
+        '--raylet-name=')  # /tmp/ray/session_2020-07-15_12-00-45_292745_38156/sockets/raylet
     parser.add_argument('--redis-address=')  # 192.168.2.19:6379
     parser.add_argument('--config-list=', action='store_true')  #
     parser.add_argument('--temp-dir=')  # /tmp/ray
@@ -217,33 +226,47 @@ def HyperEvaluate(config):
     # /////////NLI-Args//////////////
     parser = argparse.ArgumentParser(description='NLI training')
     # paths
-    parser.add_argument("--nlipath", type=str, default=config['dataset'], help="NLI data (SNLI or MultiNLI)")
-    parser.add_argument("--outputdir", type=str, default='Results/', help="Output directory")
+    parser.add_argument("--nlipath", type=str, default=config['dataset'],
+                        help="NLI data (SNLI or MultiNLI)")
+    parser.add_argument("--outputdir", type=str, default='Results/',
+                        help="Output directory")
     parser.add_argument("--outputmodelname", type=str, default='model.pickle')
-    parser.add_argument("--word_emb_path", type=str, default="dataset/GloVe/glove.840B.300d.txt",
+    parser.add_argument("--word_emb_path", type=str,
+                        default="dataset/GloVe/glove.840B.300d.txt",
                         help="word embedding file path")
 
     # training
     parser.add_argument("--n_epochs", type=int, default=20)
     parser.add_argument("--batch_size", type=int, default=128)
-    parser.add_argument("--dpout_model", type=float, default=0.2, help="encoder dropout")
-    parser.add_argument("--dpout_fc", type=float, default=0.2, help="classifier dropout")
-    parser.add_argument("--nonlinear_fc", type=float, default=0, help="use nonlinearity in fc")
+    parser.add_argument("--dpout_model", type=float, default=0.2,
+                        help="encoder dropout")
+    parser.add_argument("--dpout_fc", type=float, default=0.2,
+                        help="classifier dropout")
+    parser.add_argument("--nonlinear_fc", type=float, default=0,
+                        help="use nonlinearity in fc")
     parser.add_argument("--optimizer", type=str, default=config["optim"], help="adam")
     parser.add_argument("--lr", type=float, default=0.001, help="lr")  # sgd 0.1
-    parser.add_argument("--lrshrink", type=float, default=5, help="shrink factor for sgd")
+    parser.add_argument("--lrshrink", type=float, default=5,
+                        help="shrink factor for sgd")
     parser.add_argument("--decay", type=float, default=0.99, help="lr decay")
-    parser.add_argument("--optdecay", type=float, default=config['decay'], help="_C variant decay")
-    parser.add_argument("--topC", type=float, default=config['topC'], help="_C variant decay")
+    parser.add_argument("--optdecay", type=float, default=config['decay'],
+                        help="_C variant decay")
+    parser.add_argument("--topC", type=float, default=config['topC'],
+                        help="_C variant decay")
     parser.add_argument("--minlr", type=float, default=1e-10, help="minimum lr")
-    parser.add_argument("--max_norm", type=float, default=5., help="max norm (grad clipping)")
+    parser.add_argument("--max_norm", type=float, default=5.,
+                        help="max norm (grad clipping)")
 
     # model
-    parser.add_argument("--encoder_type", type=str, default=config['encoder_type'], help="see list of encoders")
-    parser.add_argument("--enc_lstm_dim", type=int, default=200, help="encoder nhid dimension")  # 2048
-    parser.add_argument("--n_enc_layers", type=int, default=1, help="encoder num layers")
+    parser.add_argument("--encoder_type", type=str, default=config['encoder_type'],
+                        help="see list of encoders")
+    parser.add_argument("--enc_lstm_dim", type=int, default=200,
+                        help="encoder nhid dimension")  # 2048
+    parser.add_argument("--n_enc_layers", type=int, default=1,
+                        help="encoder num layers")
     parser.add_argument("--fc_dim", type=int, default=200, help="nhid of fc layers")
-    parser.add_argument("--n_classes", type=int, default=config['num_classes'], help="entailment/neutral/contradiction")
+    parser.add_argument("--n_classes", type=int, default=config['num_classes'],
+                        help="entailment/neutral/contradiction")
     parser.add_argument("--pool_type", type=str, default='max', help="max or mean")
 
     # gpu
@@ -251,7 +274,8 @@ def HyperEvaluate(config):
     parser.add_argument("--seed", type=int, default=config['seed'], help="seed")
 
     # data
-    parser.add_argument("--word_emb_dim", type=int, default=300, help="word embedding dimension")
+    parser.add_argument("--word_emb_dim", type=int, default=300,
+                        help="word embedding dimension")
     parser.add_argument("--word_emb_type", type=str, default='normal',
                         help="word embedding type, either glove or normal")
 
@@ -265,7 +289,8 @@ def HyperEvaluate(config):
     wandb.config.update(config)
 
     print('Came here')
-    exp_folder = os.path.join(params.outputdir, params.nlipath, params.encoder_type, run_id)
+    exp_folder = os.path.join(params.outputdir, params.nlipath, params.encoder_type,
+                              run_id)
     if not os.path.exists(exp_folder):
         os.makedirs(exp_folder)
 
@@ -277,7 +302,8 @@ def HyperEvaluate(config):
     test_sample_folder = os.path.join(exp_folder, 'samples_test')
     if not os.path.exists(test_sample_folder):
         os.makedirs(test_sample_folder)
-    params.outputmodelname = os.path.join(save_folder_name, '{}_model.pkl'.format(params.encoder_type))
+    params.outputmodelname = os.path.join(save_folder_name,
+                                          '{}_model.pkl'.format(params.encoder_type))
     # print parameters passed, and all parameters
     print('\ntogrep : {0}\n'.format(sys.argv[1:]))
     print(params)
@@ -294,8 +320,9 @@ def HyperEvaluate(config):
     """
     DATA
     """
-    train, valid, test, vocab, label_vocab = DataIteratorGlove(batch_size=params.batch_size, dataset=params.nlipath,
-                                                               max_length=20, prefix='processed_')
+    train, valid, test, vocab, label_vocab = DataIteratorGlove(
+        batch_size=params.batch_size, dataset=params.nlipath,
+        max_length=20, prefix='processed_')
     # Train label class balancing
     weights = [2, 2, 2, 0.3, 7, 2, 6]
     # invert the weights by values
@@ -340,19 +367,24 @@ def HyperEvaluate(config):
     if params.optimizer == 'sgd':
         optimizer = SGD(nli_net.parameters(), lr=0.1)  # suggested LR for SGD
     elif params.optimizer == 'sgdm':
-        optimizer = SGD(nli_net.parameters(), lr=0.1, momentum=0.9)  # suggested LR for SGD
+        optimizer = SGD(nli_net.parameters(), lr=0.1,
+                        momentum=0.9)  # suggested LR for SGD
     elif params.optimizer == 'sgd_c':
-        optimizer = SGD_C(nli_net.parameters(), lr=0.1, decay=config['decay'], topC=config['topC'])
+        optimizer = SGD_C(nli_net.parameters(), lr=0.1, decay=config['decay'],
+                          topC=config['topC'])
     elif params.optimizer == 'sgdm_c':
-        optimizer = SGD_C(nli_net.parameters(), lr=0.1, momentum=0.9, decay=config['decay'], topC=config['topC'])
+        optimizer = SGD_C(nli_net.parameters(), lr=0.1, momentum=0.9,
+                          decay=config['decay'], topC=config['topC'])
     elif params.optimizer == 'adam_c':
-        optimizer = Adam_C(nli_net.parameters(), lr=0.001, decay=config['decay'], topC=config['topC'])
+        optimizer = Adam_C(nli_net.parameters(), lr=0.001, decay=config['decay'],
+                           topC=config['topC'])
     elif params.optimizer == 'adam':
         optimizer = Adam(nli_net.parameters(), lr=0.001)
     elif params.optimizer == 'rmsprop':
         optimizer = RMSprop(nli_net.parameters(), lr=0.001)
     elif params.optimizer == 'rmsprop_c':
-        optimizer = RMSprop_C(nli_net.parameters(), lr=0.001, decay=config['decay'], topC=config['topC'])
+        optimizer = RMSprop_C(nli_net.parameters(), lr=0.001, decay=config['decay'],
+                              topC=config['topC'])
 
     # scheduler = StepLR(optimizer, step_size=5, gamma=0.5)
     # cuda by default
@@ -375,36 +407,47 @@ def HyperEvaluate(config):
 
     while not train_config['stop_training'] and epoch <= params.n_epochs:
         epoch += 1
-        train_acc, offline_stats = trainepoch(nli_net, train, optimizer, loss_fn, epoch, params)
-        eval_acc, optimizer, train_config = evaluate(nli_net, valid, optimizer, epoch, train_config, params,
+        train_acc, offline_stats = trainepoch(nli_net, train, optimizer, loss_fn, epoch,
+                                              params)
+        eval_acc, optimizer, train_config = evaluate(nli_net, valid, optimizer, epoch,
+                                                     train_config, params,
                                                      eval_type='valid')
         # scheduler.step()
-        off = offline_stats['no'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
-        on = offline_stats['yes'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
+        off = offline_stats['no'] * 100 / (
+                sum([v for v in offline_stats.values()]) + 1e-7)
+        on = offline_stats['yes'] * 100 / (
+                sum([v for v in offline_stats.values()]) + 1e-7)
 
         optimizer.resetOfflineStats()
         lock = FileLock(os.path.join(save_folder_name, 'logs.txt' + '.new.lock'))
         with lock:
             with open(os.path.join(save_folder_name, 'logs.txt'), 'a') as f:
-                f.write(f'| Epoch: {epoch:03} | Train Acc: {train_acc:.3f} | Val. Acc: {eval_acc:.3f} \n')
+                f.write(
+                    f'| Epoch: {epoch:03} | Train Acc: {train_acc:.3f} | Val. Acc: {eval_acc:.3f} \n')
             lock.release()
 
         wandb.log(
-            {"Train Accuracy": train_acc, "Val. Accuracy": eval_acc, "offline updates": off, "online udpates": on})
+            {"Train Accuracy": train_acc, "Val. Accuracy": eval_acc,
+             "offline updates": off, "online udpates": on})
 
     # Run best model on test set.
     nli_net.load_state_dict(torch.load(params.outputmodelname))
 
     print('\nTEST : Epoch {0}'.format(epoch))
-    valid_acc, _, _ = evaluate(nli_net, valid, optimizer, epoch, train_config, params, eval_type='valid',
-                               test_folder=None, inv_label=label_vocab.itos, itos_vocab=vocab.itos, final_eval=True)
-    test_acc, _, _ = evaluate(nli_net, test, optimizer, epoch, train_config, params, eval_type='test',
-                              test_folder=test_sample_folder, inv_label=label_vocab.itos, itos_vocab=vocab.itos,
+    valid_acc, _, _ = evaluate(nli_net, valid, optimizer, epoch, train_config, params,
+                               eval_type='valid',
+                               test_folder=None, inv_label=label_vocab.itos,
+                               itos_vocab=vocab.itos, final_eval=True)
+    test_acc, _, _ = evaluate(nli_net, test, optimizer, epoch, train_config, params,
+                              eval_type='test',
+                              test_folder=test_sample_folder,
+                              inv_label=label_vocab.itos, itos_vocab=vocab.itos,
                               final_eval=True)
     lock = FileLock(os.path.join(save_folder_name, 'logs.txt' + '.new.lock'))
     with lock:
         with open(os.path.join(save_folder_name, 'logs.txt'), 'a') as f:
-            f.write(f'| Epoch: {epoch:03} | Test Acc: {test_acc:.3f} | Val. Acc: {valid_acc:.3f} \n')
+            f.write(
+                f'| Epoch: {epoch:03} | Test Acc: {test_acc:.3f} | Val. Acc: {valid_acc:.3f} \n')
         lock.release()
     # ex.log_asset(file_name=res_file, file_like_object=open(res_file, 'r'))
 
@@ -417,14 +460,14 @@ best_hyperparameters = None
 
 PARAM_GRID = list(product(
     ['InferSent'],  # , 'BLSTMprojEncoder', 'ConvNetEncoder'],             # model
-    [100, 101, 102],#, 103, 104], # seeds
+    [100, 101, 102],  # , 103, 104], # seeds
     ['snli'],  # dataset
-    ['sgd_c'], # optimizer
+    ['sgd_c'],  # optimizer
     [0.1, 0.01, 0.001, 0.0001],  # lr
     [0.7, 0.9, 0.99],  # , 0.95],  # decay
     [5, 10, 20],  # topC
-    ['sum'],         # aggr
-    [1.0]               # kappa
+    ['sum'],  # aggr
+    [1.0]  # kappa
 ))
 
 # defaults to 1 if not running under SLURM
@@ -471,7 +514,7 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
             cpus_per_task=10,
             slurm_mem="",
         )
-        job = executor.submit(HyperEvaluate, config)
+        job = executor.submit(hyper_evaluate, config)
         print(f"Submitted job {job.job_id}")
     else:
-        HyperEvaluate(config)
+        hyper_evaluate(config)

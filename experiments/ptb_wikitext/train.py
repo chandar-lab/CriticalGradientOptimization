@@ -7,7 +7,6 @@ from itertools import product
 import torch
 import torch.nn as nn
 import torch.onnx
-
 import wandb
 
 sys.path.append('../..')
@@ -16,13 +15,15 @@ from optimizers.optim_experimental import AggMo
 
 # commandline arguments
 
-parser = argparse.ArgumentParser(description='PyTorch PennTreeBank RNN/LSTM/GRU/Transformer Language Model')
+parser = argparse.ArgumentParser(
+    description='PyTorch PennTreeBank RNN/LSTM/GRU/Transformer Language Model')
 
 parser.add_argument('--data_path', type=str, default='../../Dataset')
 parser.add_argument('--results_path', type=str, default='..')
 
 parser.add_argument('--model', type=str, default='LSTM',
-                    help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU, Transformer)')
+                    help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU, '
+                         'Transformer)')
 parser.add_argument('--emsize', type=int, default=64,
                     help='size of word embeddings')
 parser.add_argument('--nhid', type=int, default=128,
@@ -49,7 +50,8 @@ parser.add_argument('--save', type=str, default='model.pt',
                     help='path to save the final model')
 
 parser.add_argument('--nhead', type=int, default=2,
-                    help='the number of heads in the encoder/decoder of the transformer model')
+                    help='the number of heads in the encoder/decoder of the '
+                         'transformer model')
 parser.add_argument('--dry-run', action='store_true',
                     help='verify the code and the model')
 
@@ -154,8 +156,9 @@ def train(model, train_data, optimizer, ntokens, bptt, CLIP, batch_size, criteri
     n_batches = len(train_data) // bptt
     for batch, i in enumerate(range(0, train_data.size(0) - 1, bptt)):
         data, targets = get_batch(train_data, i, bptt)
-        # Starting each batch, we detach the hidden state from how it was previously produced.
-        # If we didn't, the model would try backpropagating all the way to start of the dataset.
+        # Starting each batch, we detach the hidden state from how it was previously
+        # produced. If we didn't, the model would try backpropagating all the way to
+        # start of the dataset.
         model.zero_grad()
         hidden = repackage_hidden(hidden)
         output, hidden = model(data, hidden)
@@ -177,14 +180,14 @@ def train(model, train_data, optimizer, ntokens, bptt, CLIP, batch_size, criteri
 
 
 # Loop over epochs.
-def HyperEvaluate(config):
+def hyper_evaluate(config):
     """
     Completes training, validation, and testing for one set of hyperparameters
     :param config: dictionary of hyperparameters to train on
     :return: Best validation performance, best test performance/loss
     """
-    import word_language_model.data as data
-    import word_language_model.model as model
+    import model.data as data
+    import model.model as model
 
     # Set the random seed manually for reproducibility.
     torch.manual_seed(config['seed'])
@@ -210,20 +213,21 @@ def HyperEvaluate(config):
     N_EPOCHS = 50  # number of epochs
     CLIP = 0.25  # gradient clip value    # directory name to save the models.
     if '_C' in config['optim']:
-        run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr']) + '_topC_' + str(
-            config['topC']) + '_decay_' + str(config['decay']) + '_kappa_' + str(config['kappa']) + '_' + '_' + config[
+        run_id = "seed_" + str(config['seed']) + '_LR_' + str(
+            config['lr']) + '_topC_' + str(
+            config['topC']) + '_decay_' + str(config['decay']) + '_kappa_' + str(
+            config['kappa']) + '_' + '_' + config[
                      'aggr']
     else:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
-    # wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'], reinit=True)
-    # wandb.init(project="Critical-Gradients-LSTM-" + config['dataset'] + "_ext", reinit=True)
     wandb.init(project="Critical-Gradients-EXT")
     wandb.run.name = run_id
 
     wandb.config.update(config)
 
-    MODEL_SAVE_PATH = os.path.join('../../Results', config['dataset'], config['model'] + '_' + config['optim'], 'Model',
+    MODEL_SAVE_PATH = os.path.join('../../Results', config['dataset'],
+                                   config['model'] + '_' + config['optim'], 'Model',
                                    run_id)
     if not os.path.exists(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
@@ -240,10 +244,12 @@ def HyperEvaluate(config):
     ntokens = len(corpus.dictionary)
     del corpus
     if config['model'] == 'Transformer':
-        model = model.TransformerModel(ntokens, args.emsize, args.nhead, args.nhid, args.nlayers, args.dropout).to(
+        model = model.TransformerModel(ntokens, args.emsize, args.nhead, args.nhid,
+                                       args.nlayers, args.dropout).to(
             device)
     else:
-        model = model.RNNModel(config['model'], ntokens, args.emsize, args.nhid, config['layers'], args.dropout,
+        model = model.RNNModel(config['model'], ntokens, args.emsize, args.nhid,
+                               config['layers'], args.dropout,
                                args.tied).to(device)
 
     criterion = nn.NLLLoss()
@@ -252,23 +258,30 @@ def HyperEvaluate(config):
     elif config['optim'] == 'SGDM':
         optimizer = SGD(model.parameters(), lr=config['lr'], momentum=0.9)
     elif config['optim'] == 'SGD_C':
-        optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
-                          aggr=config['aggr'], critical_test=config['crit_test'], sampling=config['sampling'])
+        optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'],
+                          topC=config['topC'],
+                          aggr=config['aggr'], critical_test=config['crit_test'],
+                          sampling=config['sampling'])
     elif config['optim'] == 'SGDM_C':
-        optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9, decay=config['decay'], topC=config['topC'],
+        optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9,
+                          decay=config['decay'], topC=config['topC'],
                           aggr=config['aggr'], critical_test=config['crit_test'],
                           sampling=config['sampling'])
     elif config['optim'] == 'Adam_C':
-        optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                           topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
+        optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'],
+                           kappa=config['kappa'],
+                           topC=config['topC'], aggr=config['aggr'],
+                           critical_test=config['crit_test'],
                            sampling=config['sampling'])
     elif config['optim'] == 'Adam':
         optimizer = Adam(model.parameters(), lr=config['lr'])
     elif config['optim'] == 'RMSprop':
         optimizer = RMSprop(model.parameters(), lr=config['lr'])
     elif config['optim'] == 'RMSprop_C':
-        optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                              topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
+        optimizer = RMSprop_C(model.parameters(), lr=config['lr'],
+                              decay=config['decay'], kappa=config['kappa'],
+                              topC=config['topC'], aggr=config['aggr'],
+                              critical_test=config['crit_test'],
                               sampling=config['sampling'])
     elif config['optim'] == 'AggMo':
         optimizer = AggMo(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99])
@@ -279,23 +292,31 @@ def HyperEvaluate(config):
 
     for epoch in range(N_EPOCHS):
 
-        train_loss, offline_stats = train(model, train_data, optimizer, ntokens, args.bptt, args.clip, args.batch_size,
+        train_loss, offline_stats = train(model, train_data, optimizer, ntokens,
+                                          args.bptt, args.clip, args.batch_size,
                                           criterion)
-        off = offline_stats['no'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
-        on = offline_stats['yes'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
+        off = offline_stats['no'] * 100 / (
+                sum([v for v in offline_stats.values()]) + 1e-7)
+        on = offline_stats['yes'] * 100 / (
+                sum([v for v in offline_stats.values()]) + 1e-7)
         val_loss, val_ppl = test(model, val_data, ntokens, args.bptt, criterion)
         test_loss, test_ppl = test(model, test_data, ntokens, args.bptt, criterion)
         if not config['stats']:
-            wandb.log({"Train Loss": train_loss, "Validation Loss": val_loss, "Validation Perplexity": val_ppl,
-                       "Test Loss": test_loss, "Test Perplexity": test_ppl, "offline updates": off,
+            wandb.log({"Train Loss": train_loss, "Validation Loss": val_loss,
+                       "Validation Perplexity": val_ppl,
+                       "Test Loss": test_loss, "Test Perplexity": test_ppl,
+                       "offline updates": off,
                        "online udpates": on})
         # If triggered, will log stats on the values of the average gc and ct
         else:
             gc_v_gt = optimizer.getAnalysis()
-            wandb.log({"Train Loss": train_loss, "Validation Loss": val_loss, "Validation Perplexity": val_ppl,
-                       "Test Loss": test_loss, "Test Perplexity": test_ppl, "offline updates": off,
+            wandb.log({"Train Loss": train_loss, "Validation Loss": val_loss,
+                       "Validation Perplexity": val_ppl,
+                       "Test Loss": test_loss, "Test Perplexity": test_ppl,
+                       "offline updates": off,
                        "online udpates": on, 'gt': gc_v_gt['gt'] / gc_v_gt['count'],
-                       'gc': gc_v_gt['gc'] / gc_v_gt['count'], 'gc_aggr': gc_v_gt['gc_aggr'] / gc_v_gt['count']}
+                       'gc': gc_v_gt['gc'] / gc_v_gt['count'],
+                       'gc_aggr': gc_v_gt['gc_aggr'] / gc_v_gt['count']}
                       )
 
         optimizer.resetOfflineStats()
@@ -313,6 +334,7 @@ def HyperEvaluate(config):
 
     return best_val_ppl, best_test_loss, best_test_ppl
 
+
 PARAM_GRID = list(product(
     ['LSTM'],  # model
     [100, 101, 102, 103, 104],  # seeds
@@ -325,7 +347,7 @@ PARAM_GRID = list(product(
     [0.9, 0.99, 0.999],  # momentum
     [0],  # beta1
     [0],  # beta2
-    [0] #alpha
+    [0]  # alpha
 ))
 
 # total number of slurm workers detected
@@ -376,5 +398,6 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     else:
         config['alpha'] = 0
 
-    val_ppl, test_loss, test_ppl = HyperEvaluate(config)
-    wandb.log({'Best Validation Perplexity': val_ppl, 'Best Test Loss': test_loss, 'Best Test Perplexity': test_ppl})
+    val_ppl, test_loss, test_ppl = hyper_evaluate(config)
+    wandb.log({'Best Validation Perplexity': val_ppl, 'Best Test Loss': test_loss,
+               'Best Test Perplexity': test_ppl})

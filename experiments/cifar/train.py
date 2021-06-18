@@ -6,10 +6,10 @@ from itertools import product
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import wandb
 
 import model.cifar as models
-import wandb
-from model.convnets import CIFAR10CNNModel, CIFAR100CNNModel, CIFAR100CNNModel_noDropOut
+from model.convnets import CIFAR10CNNModel, CIFAR100CNNModel
 
 sys.path.append('../..')
 from data_loader import load_data_subset
@@ -46,7 +46,8 @@ def train(model, iterator, optimizer, criterion, clip=10):
     Returns:
         epoch_loss: Average loss of the epoch.
     '''
-    #  some layers have different behavior during train/and evaluation (like BatchNorm, Dropout) so setting it matters.
+    # some layers have different behavior during train/and evaluation (like
+    # BatchNorm, Dropout) so setting it matters.
     model.train()
     # loss
     epoch_loss = 0
@@ -85,7 +86,8 @@ def evaluate(model, iterator, criterion):
     Returns:
         epoch_loss: Average loss of the epoch.
     '''
-    #  some layers have different behavior during train/and evaluation (like BatchNorm, Dropout) so setting it matters.
+    # some layers have different behavior during train/and evaluation (like
+    # BatchNorm, Dropout) so setting it matters.
     model.eval()
     # loss
     epoch_loss = 0
@@ -100,7 +102,8 @@ def evaluate(model, iterator, criterion):
             total += trg.size(0)
             output = model(src)
             loss = criterion(output, trg)
-            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max
+            # log-probability
             correct = pred.eq(trg.view_as(pred)).sum()
 
             epoch_loss += loss.item()
@@ -108,11 +111,13 @@ def evaluate(model, iterator, criterion):
     return epoch_loss / len(iterator), 100. * epoch_correct / total
 
 
-def HyperEvaluate(config):
+def hyper_evaluate(config):
     """
     Completes training, validation, and testing for one set of hyperparameters
-    :param config: dictionary of hyperparameters to train on
-    :return: Best validation performance, best test performance/loss
+    Args:
+        config: dictionary of hyperparameters to train on
+    Returns:
+        Best validation performance, best test performance/loss
     """
     torch.manual_seed(config['seed'])
 
@@ -120,8 +125,10 @@ def HyperEvaluate(config):
     BATCH_SIZE = args.batch_size
 
     if '_C' in config['optim']:
-        run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr']) + '_topC_' + str(
-            config['topC']) + '_decay_' + str(config['decay']) + '_kappa_' + str(config['kappa']) + '_' + config['aggr']
+        run_id = "seed_" + str(config['seed']) + '_LR_' + str(
+            config['lr']) + '_topC_' + str(
+            config['topC']) + '_decay_' + str(config['decay']) + '_kappa_' + str(
+            config['kappa']) + '_' + config['aggr']
     else:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
@@ -130,25 +137,28 @@ def HyperEvaluate(config):
 
     wandb.config.update(config)
 
-    MODEL_SAVE_PATH = os.path.join('../../Results', config['dataset'], config['model'] + '_' + config['optim'], 'Model',
+    MODEL_SAVE_PATH = os.path.join('../../Results', config['dataset'],
+                                   config['model'] + '_' + config['optim'], 'Model',
                                    run_id)
     if not os.path.exists(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
 
     if config['dataset'] == 'cifar10':
-        train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(data_aug=0,
-                                                                                         batch_size=BATCH_SIZE,
-                                                                                         workers=0, dataset='cifar10',
-                                                                                         data_target_dir=data_path,
-                                                                                         labels_per_class=5000,
-                                                                                         valid_labels_per_class=500)
+        train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(
+            data_aug=0,
+            batch_size=BATCH_SIZE,
+            workers=0, dataset='cifar10',
+            data_target_dir=data_path,
+            labels_per_class=5000,
+            valid_labels_per_class=500)
     elif config['dataset'] == 'cifar100':
-        train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(data_aug=0,
-                                                                                         batch_size=BATCH_SIZE,
-                                                                                         workers=0, dataset='cifar100',
-                                                                                         data_target_dir=data_path,
-                                                                                         labels_per_class=500,
-                                                                                         valid_labels_per_class=50)
+        train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(
+            data_aug=0,
+            batch_size=BATCH_SIZE,
+            workers=0, dataset='cifar100',
+            data_target_dir=data_path,
+            labels_per_class=500,
+            valid_labels_per_class=50)
 
     # encoder
 
@@ -159,8 +169,6 @@ def HyperEvaluate(config):
             model = CIFAR100CNNModel()
 
         optimizer = optim.Adadelta(model.parameters(), lr=config['lr'])
-    elif config['model'] == 'convnet_noDropOut':
-        model = CIFAR100CNNModel_noDropOut()
     elif config['model'] == 'resnet':
         model = models.__dict__['resnet'](
             num_classes=num_classes,
@@ -177,28 +185,40 @@ def HyperEvaluate(config):
     if config['optim'] == 'SGD':
         optimizer = SGD(model.parameters(), lr=config['lr'])
     elif config['optim'] == 'SGDM':
-        optimizer = SGD(model.parameters(), lr=config['lr'], momentum=config['momentum'])
+        optimizer = SGD(model.parameters(), lr=config['lr'],
+                        momentum=config['momentum'])
     elif config['optim'] == 'SGD_C':
-        optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
-                          aggr=config['aggr'], critical_test=config['crit_test'], sampling=config['sampling'])
+        optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'],
+                          topC=config['topC'],
+                          aggr=config['aggr'], critical_test=config['crit_test'],
+                          sampling=config['sampling'])
     elif config['optim'] == 'SGDM_C':
-        optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=config['momentum'], decay=config['decay'],
-                          topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
+        optimizer = SGD_C(model.parameters(), lr=config['lr'],
+                          momentum=config['momentum'], decay=config['decay'],
+                          topC=config['topC'], aggr=config['aggr'],
+                          critical_test=config['crit_test'],
                           sampling=config['sampling'])
     elif config['optim'] == 'Adam_C':
-        optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                           topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
-                           sampling=config['sampling'], betas=(config['beta1'], config['beta2']))
+        optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'],
+                           kappa=config['kappa'],
+                           topC=config['topC'], aggr=config['aggr'],
+                           critical_test=config['crit_test'],
+                           sampling=config['sampling'],
+                           betas=(config['beta1'], config['beta2']))
     elif config['optim'] == 'Adam':
-        optimizer = Adam(model.parameters(), lr=config['lr'], betas=(config['beta1'], config['beta2']))
+        optimizer = Adam(model.parameters(), lr=config['lr'],
+                         betas=(config['beta1'], config['beta2']))
     elif config['optim'] == 'RMSprop':
         optimizer = RMSprop(model.parameters(), lr=config['lr'], alpha=config['alpha'])
     elif config['optim'] == 'RMSprop_C':
-        optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                              topC=config['topC'], aggr=config['aggr'], critical_test=config['crit_test'],
+        optimizer = RMSprop_C(model.parameters(), lr=config['lr'],
+                              decay=config['decay'], kappa=config['kappa'],
+                              topC=config['topC'], aggr=config['aggr'],
+                              critical_test=config['crit_test'],
                               sampling=config['sampling'], alpha=config['alpha'])
     elif config['optim'] == 'AggMo_C':
-        optimizer = AggMo_C(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99], decay=config['decay'],
+        optimizer = AggMo_C(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99],
+                            decay=config['decay'],
                             topC=config['topC'], aggr=config['aggr'])
 
     criterion = nn.CrossEntropyLoss()
@@ -213,20 +233,27 @@ def HyperEvaluate(config):
         valid_loss, valid_perf = evaluate(model, valid_iterator, criterion)
         test_loss, test_perf = evaluate(model, test_iterator, criterion)
 
-        off = offline_stats['no'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
-        on = offline_stats['yes'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
+        off = offline_stats['no'] * 100 / (
+                sum([v for v in offline_stats.values()]) + 1e-7)
+        on = offline_stats['yes'] * 100 / (
+                sum([v for v in offline_stats.values()]) + 1e-7)
 
         if not config['stats']:
-            wandb.log({"Train Loss": train_loss, "Validation Loss": valid_loss, "Validation Accuracy": valid_perf,
-                       "Test Loss": test_loss, "Test Accuracy": test_perf, "offline updates": off,
+            wandb.log({"Train Loss": train_loss, "Validation Loss": valid_loss,
+                       "Validation Accuracy": valid_perf,
+                       "Test Loss": test_loss, "Test Accuracy": test_perf,
+                       "offline updates": off,
                        "online udpates": on})
         # If triggered, will log stats on the values of the average gc and ct
         else:
             gc_v_gt = optimizer.getAnalysis()
-            wandb.log({"Train Loss": train_loss, "Validation Loss": valid_loss, "Validation Accuracy": valid_perf,
-                       "Test Loss": test_loss, "Test Accuracy": test_perf, "offline updates": off,
+            wandb.log({"Train Loss": train_loss, "Validation Loss": valid_loss,
+                       "Validation Accuracy": valid_perf,
+                       "Test Loss": test_loss, "Test Accuracy": test_perf,
+                       "offline updates": off,
                        "online udpates": on, 'gt': gc_v_gt['gt'] / gc_v_gt['count'],
-                       'gc': gc_v_gt['gc'] / gc_v_gt['count'], 'gc_aggr': gc_v_gt['gc_aggr'] / gc_v_gt['count']}
+                       'gc': gc_v_gt['gc'] / gc_v_gt['count'],
+                       'gc_aggr': gc_v_gt['gc_aggr'] / gc_v_gt['count']}
                       )
             optimizer.resetAnalysis()
 
@@ -234,7 +261,8 @@ def HyperEvaluate(config):
 
         if valid_perf > best_validation_perf:
             best_validation_perf = valid_perf
-            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_PATH, 'best_model.pt'))
+            torch.save(model.state_dict(),
+                       os.path.join(MODEL_SAVE_PATH, 'best_model.pt'))
 
         if test_loss < best_test_loss:
             best_test_loss = test_loss
@@ -257,7 +285,7 @@ PARAM_GRID = list(product(
     [0.9, 0.99, 0.999],  # momentum
     [0],  # beta1
     [0],  # beta2
-    [0] #alpha
+    [0]  # alpha
 ))
 
 # total number of slurm workers detected
@@ -307,5 +335,6 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     else:
         config['alpha'] = 0
 
-    val_ppl, test_loss, test_ppl = HyperEvaluate(config)
-    wandb.log({'Best Validation Accuracy': val_ppl, 'Best Test Loss': test_loss, 'Best Test Accuracy': test_ppl})
+    val_ppl, test_loss, test_ppl = hyper_evaluate(config)
+    wandb.log({'Best Validation Accuracy': val_ppl, 'Best Test Loss': test_loss,
+               'Best Test Accuracy': test_ppl})

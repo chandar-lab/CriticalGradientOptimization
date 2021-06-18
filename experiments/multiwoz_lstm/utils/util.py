@@ -2,12 +2,13 @@
 Utility functions
 '''
 
-import argparse
 import _pickle as pkl
+import argparse
 import json
-import sys
 import math
+import sys
 import time
+
 import numpy as np
 import torch
 
@@ -38,11 +39,13 @@ def loadDialogue(model, val_file, input_tensor, target_tensor, bs_tensor, db_ten
     # Iterate over dialogue
     for idx, (usr, sys, bs, db) in enumerate(
             zip(val_file['usr'], val_file['sys'], val_file['bs'], val_file['db'])):
-        tensor = [model.input_word2index(word) for word in usr.strip(' ').split(' ')] + [
-            EOS_token]  # model.input_word2index(word)
+        tensor = [model.input_word2index(word) for word in
+                  usr.strip(' ').split(' ')] + [
+                     EOS_token]  # model.input_word2index(word)
         input_tensor.append(torch.LongTensor(tensor))  # .view(-1, 1))
 
-        tensor = [model.output_word2index(word) for word in sys.strip(' ').split(' ')] + [EOS_token]
+        tensor = [model.output_word2index(word) for word in
+                  sys.strip(' ').split(' ')] + [EOS_token]
         target_tensor.append(torch.LongTensor(tensor))  # .view(-1, 1)
 
         bs_tensor.append([float(belief) for belief in bs])
@@ -51,9 +54,9 @@ def loadDialogue(model, val_file, input_tensor, target_tensor, bs_tensor, db_ten
     return input_tensor, target_tensor, bs_tensor, db_tensor
 
 
-#json loads strings as unicode; we currently still work with Python 2 strings, and need conversion
+# json loads strings as unicode; we currently still work with Python 2 strings, and need conversion
 def unicode_to_utf8(d):
-    return dict((key.encode("UTF-8"), value) for (key,value) in d.items())
+    return dict((key.encode("UTF-8"), value) for (key, value) in d.items())
 
 
 def load_dict(filename):
@@ -74,7 +77,8 @@ def load_config(basename):
             with open('%s.pkl' % basename, 'rb') as f:
                 return pkl.load(f)
         except:
-            sys.stderr.write('Error: config file {0}.json is missing\n'.format(basename))
+            sys.stderr.write(
+                'Error: config file {0}.json is missing\n'.format(basename))
             sys.exit(1)
 
 

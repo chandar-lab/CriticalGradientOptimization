@@ -1,6 +1,7 @@
+import random
+
 import torch
 import torch.nn as nn
-import random
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -51,7 +52,8 @@ class EncoderDecoder(nn.Module):
                     input = (trg[t] if use_teacher_force else top1)
             else:
                 for t in range(1, max_len):
-                    output, hidden, cell = self.decoder(input, hidden, cell, encoder_outputs)
+                    output, hidden, cell = self.decoder(input, hidden, cell,
+                                                        encoder_outputs)
                     outputs[t] = output
                     use_teacher_force = random.random() < teacher_forcing_ratio
                     top1 = output.max(2)[1].squeeze(0)

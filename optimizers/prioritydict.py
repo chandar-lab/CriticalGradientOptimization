@@ -1,7 +1,8 @@
-from heapq import heapify, heappush, heappop
-import torch
 import random
 from copy import deepcopy
+from heapq import heapify
+
+import torch
 
 random.seed(100)
 
@@ -72,7 +73,8 @@ class priorityDict(dict):
             del self[k]
 
     def _rebuild_heap(self):
-        self._heap = [it for it in self._heap if it.p >= 0.0]  # >= used as fix for errors in some data
+        self._heap = [it for it in self._heap if
+                      it.p >= 0.0]  # >= used as fix for errors in some data
         if len(self._heap) > 0:
             heapify(self._heap)
             if not self.isEmpty() and self.isFull():
@@ -205,7 +207,8 @@ class priorityDict(dict):
             elif self.sampling == "cos_similarity":
                 av = self.gradMean()
                 av = torch.flatten(av)
-                prob = 0.5 * (torch.dot(torch.flatten(val), av) / (val.norm() * av.norm()) + 1)
+                prob = 0.5 * (torch.dot(torch.flatten(val), av) / (
+                        val.norm() * av.norm()) + 1)
                 if random.uniform(0, 1) <= prob:
                     self._heap.append(HeapItem(key, val))
             else:

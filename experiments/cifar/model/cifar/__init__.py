@@ -1,7 +1,5 @@
-from __future__ import absolute_import
-
-"""The models subpackage contains definitions for the following model for CIFAR10/CIFAR100
-architectures:
+"""The models subpackage contains definitions for the following model for
+CIFAR10/CIFAR100 architectures:
 
 -  `AlexNet`_
 -  `VGG`_
@@ -61,10 +59,12 @@ Densenet-161             22.35           6.20
 .. _DenseNet: https://arxiv.org/abs/1608.06993
 """
 
+from __future__ import absolute_import
+
 from .alexnet import *
-from .vgg import *
+from .densenet import *
+from .preresnet import *
 from .resnet import *
 from .resnext import *
+from .vgg import *
 from .wrn import *
-from .preresnet import *
-from .densenet import *

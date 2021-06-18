@@ -9,10 +9,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
 import wandb
-from encoder_decoder import EncoderDecoder
-from models import ConvNetEncoder, ClassDecoder, LogisticRegression, FCLayer
+
+from experiments.mnist.model.encoder_decoder import EncoderDecoder
+from experiments.mnist.model.models import ConvNetEncoder, ClassDecoder, LogisticRegression, FCLayer
 
 sys.path.append('../..')
 from data_loader import load_data_subset
@@ -112,7 +112,8 @@ def evaluate(model, iterator, criterion):
             total += trg.size(0)
             output, hidden = model(src)
             loss = criterion(output, trg)
-            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+            pred = output.argmax(dim=1,
+                                 keepdim=True)  # get the index of the max log-probability
             correct = pred.eq(trg.view_as(pred)).sum()
 
             epoch_loss += loss.item()
@@ -120,7 +121,7 @@ def evaluate(model, iterator, criterion):
     return epoch_loss / len(iterator), 100. * epoch_correct / total
 
 
-def HyperEvaluate(config):
+def hyper_evaluate(config):
     """
     Completes training, validation, and testing for one set of hyperparameters
     :param config: dictionary of hyperparameters to train on
@@ -136,8 +137,10 @@ def HyperEvaluate(config):
         BATCH_SIZE = args.batch_size
 
     if '_C' in config['optim']:
-        run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr']) + '_topC_' + str(
-            config['topC']) + '_decay_' + str(config['decay']) + '_kappa_' + str(config['kappa']) + '_' + config['aggr']
+        run_id = "seed_" + str(config['seed']) + '_LR_' + str(
+            config['lr']) + '_topC_' + str(
+            config['topC']) + '_decay_' + str(config['decay']) + '_kappa_' + str(
+            config['kappa']) + '_' + config['aggr']
     else:
         run_id = "seed_" + str(config['seed']) + '_LR_' + str(config['lr'])
 
@@ -146,16 +149,18 @@ def HyperEvaluate(config):
 
     wandb.config.update(config)
 
-    MODEL_SAVE_PATH = os.path.join('../../Results', config['dataset'], config['model'] + '_' + config['optim'], 'Model',
+    MODEL_SAVE_PATH = os.path.join('../../Results', config['dataset'],
+                                   config['model'] + '_' + config['optim'], 'Model',
                                    run_id)
     if not os.path.exists(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
 
-    train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(data_aug=1, batch_size=BATCH_SIZE,
-                                                                                     workers=0, dataset='mnist',
-                                                                                     data_target_dir=data_path,
-                                                                                     labels_per_class=5000,
-                                                                                     valid_labels_per_class=500)
+    train_iterator, valid_iterator, _, test_iterator, num_classes = load_data_subset(
+        data_aug=1, batch_size=BATCH_SIZE,
+        workers=0, dataset='mnist',
+        data_target_dir=data_path,
+        labels_per_class=5000,
+        valid_labels_per_class=500)
 
     # encoder
     if config['model'] == 'LR':
@@ -181,26 +186,32 @@ def HyperEvaluate(config):
         elif config['optim'] == 'AggMo':
             optimizer = AggMo(model.parameters(), lr=config['lr'], betas=[0, 0.9, 0.99])
         elif config['optim'] == 'SGD_C':
-            optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
+            optimizer = SGD_C(model.parameters(), lr=config['lr'],
+                              decay=config['decay'], topC=config['topC'],
                               aggr=config['aggr'])
         elif config['optim'] == 'SGD_C_HIST':
-            optimizer = SGD_C_HIST(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
+            optimizer = SGD_C_HIST(model.parameters(), lr=config['lr'],
+                                   decay=config['decay'], topC=config['topC'],
                                    aggr=config['aggr'])
         elif config['optim'] == 'SGDM_C':
-            optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9, decay=config['decay'],
+            optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9,
+                              decay=config['decay'],
                               topC=config['topC'], aggr=config['aggr'])
         elif config['optim'] == 'Adam_C':
-            optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
+            optimizer = Adam_C(model.parameters(), lr=config['lr'],
+                               decay=config['decay'], kappa=config['kappa'],
                                topC=config['topC'], aggr=config['aggr'])
         elif config['optim'] == 'Adam':
             optimizer = Adam(model.parameters(), lr=config['lr'])
         elif config['optim'] == 'RMSprop':
             optimizer = RMSprop(model.parameters(), lr=config['lr'])
         elif config['optim'] == 'RMSprop_C':
-            optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
+            optimizer = RMSprop_C(model.parameters(), lr=config['lr'],
+                                  decay=config['decay'], kappa=config['kappa'],
                                   topC=config['topC'], aggr=config['aggr'])
         elif config['optim'] == 'SAGA':
-            optimizer = SAGA(model.parameters(), lr=config['lr'], n_samples=len(train_iterator.dataset))
+            optimizer = SAGA(model.parameters(), lr=config['lr'],
+                             n_samples=len(train_iterator.dataset))
         criterion = nn.CrossEntropyLoss().to(device)
 
     best_validation_perf = float('-inf')
@@ -213,22 +224,28 @@ def HyperEvaluate(config):
         valid_loss, valid_perf = evaluate(model, valid_iterator, criterion)
         test_loss, test_perf = evaluate(model, test_iterator, criterion)
 
-        off = offline_stats['no'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
-        on = offline_stats['yes'] * 100 / (sum([v for v in offline_stats.values()]) + 1e-7)
+        off = offline_stats['no'] * 100 / (
+                sum([v for v in offline_stats.values()]) + 1e-7)
+        on = offline_stats['yes'] * 100 / (
+                sum([v for v in offline_stats.values()]) + 1e-7)
 
-        wandb.log({"Train Loss": train_loss, "Validation Loss": valid_loss, "Val. Accuracy": valid_perf,
-                   "Test Loss": test_loss, "Test Accuracy": test_perf, "offline updates": off, "online udpates": on})
+        wandb.log({"Train Loss": train_loss, "Validation Loss": valid_loss,
+                   "Val. Accuracy": valid_perf,
+                   "Test Loss": test_loss, "Test Accuracy": test_perf,
+                   "offline updates": off, "online udpates": on})
 
         # If triggered, will log stats on the values of the average gc and ct
         if config['stats']:
             gc_v_gt = optimizer.getAnalysis()
-            wandb.log({'gt': gc_v_gt['gt'] / gc_v_gt['count'], 'gc': gc_v_gt['gc'] / gc_v_gt['count']})
+            wandb.log({'gt': gc_v_gt['gt'] / gc_v_gt['count'],
+                       'gc': gc_v_gt['gc'] / gc_v_gt['count']})
 
         optimizer.resetOfflineStats()
 
         if valid_perf > best_validation_perf:
             best_validation_perf = valid_perf
-            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_PATH, 'best_model.pt'))
+            torch.save(model.state_dict(),
+                       os.path.join(MODEL_SAVE_PATH, 'best_model.pt'))
 
         if test_loss < best_test_loss:
             best_test_loss = test_loss
@@ -242,13 +259,17 @@ def HyperEvaluate(config):
     if "HIST" in config["optim"]:
         age_at_removal, age_at_epoch_end = optimizer.get_ages()
         try:
-            ages_at_removal[config['model']][config['topC']][config['decay']] += age_at_removal
+            ages_at_removal[config['model']][config['topC']][
+                config['decay']] += age_at_removal
         except KeyError:
-            ages_at_removal[config['model']][config['topC']][config['decay']] = age_at_removal
+            ages_at_removal[config['model']][config['topC']][
+                config['decay']] = age_at_removal
         try:
-            ages_at_epoch_end[config['model']][config['topC']][config['decay']] += age_at_epoch_end
+            ages_at_epoch_end[config['model']][config['topC']][
+                config['decay']] += age_at_epoch_end
         except KeyError:
-            ages_at_epoch_end[config['model']][config['topC']][config['decay']] = age_at_epoch_end
+            ages_at_epoch_end[config['model']][config['topC']][
+                config['decay']] = age_at_epoch_end
 
     return best_validation_perf, best_test_loss, best_test_perf
 
@@ -265,7 +286,6 @@ PARAM_GRID = list(product(
     [1.0],  # kappa
     [False]  # Stats
 ))
-
 
 ages_at_removal = collections.defaultdict(lambda: collections.defaultdict(dict))
 ages_at_epoch_end = collections.defaultdict(lambda: collections.defaultdict(dict))
@@ -302,8 +322,9 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
         config['topC'] = 0
         config['kappa'] = 0
 
-    val_perf, test_loss, test_perf = HyperEvaluate(config)
-    wandb.log({'Best Validation Accuracy': val_perf, 'Best Test Loss': test_loss, 'Best Test Accuracy': test_perf})
+    val_perf, test_loss, test_perf = hyper_evaluate(config)
+    wandb.log({'Best Validation Accuracy': val_perf, 'Best Test Loss': test_loss,
+               'Best Test Accuracy': test_perf})
 
 # Code below is used to plot histograms, when used with SGD_C_HIST
 
@@ -314,7 +335,9 @@ if bool(ages_at_removal):
             to_plot = []
             labels = []
             for decay in ages_at_removal[model][topC].keys():
-                HISTOGRAM_SAVE_PATH = os.path.join('../../mnist/Histograms', 'mnist', model, "Decay_Sweeps", "topC_" + str(topC))
+                HISTOGRAM_SAVE_PATH = os.path.join('../../mnist/Histograms', 'mnist',
+                                                   model, "Decay_Sweeps",
+                                                   "topC_" + str(topC))
                 if not os.path.exists(HISTOGRAM_SAVE_PATH):
                     os.makedirs(HISTOGRAM_SAVE_PATH)
                 ages = ages_at_removal[model][topC][decay]
@@ -340,7 +363,9 @@ if bool(ages_at_epoch_end):
             to_plot = []
             labels = []
             for decay in ages_at_epoch_end[model][topC].keys():
-                HISTOGRAM_SAVE_PATH = os.path.join('../../mnist/Histograms', 'mnist', model, "Decay_Sweeps", "topC_" + str(topC))
+                HISTOGRAM_SAVE_PATH = os.path.join('../../mnist/Histograms', 'mnist',
+                                                   model, "Decay_Sweeps",
+                                                   "topC_" + str(topC))
                 if not os.path.exists(HISTOGRAM_SAVE_PATH):
                     os.makedirs(HISTOGRAM_SAVE_PATH)
                 ages = ages_at_epoch_end[model][topC][decay]

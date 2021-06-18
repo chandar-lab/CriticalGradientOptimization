@@ -7,7 +7,6 @@ from nltk.util import ngrams
 timepat = re.compile("\d{1,2}[:]\d{1,2}")
 pricepat = re.compile("\d{1,3}[.]\d{1,2}")
 
-
 fin = open('utils/mapping.pair')
 replacements = []
 for line in fin.readlines():
@@ -57,8 +56,10 @@ def normalize(text):
             text = text.replace(text[sidx:eidx], ''.join(m))
 
     # normalize postcode
-    ms = re.findall('([a-z]{1}[\. ]?[a-z]{1}[\. ]?\d{1,2}[, ]+\d{1}[\. ]?[a-z]{1}[\. ]?[a-z]{1}|[a-z]{2}\d{2}[a-z]{2})',
-                    text)
+    ms = re.findall(
+        '([a-z]{1}[\. ]?[a-z]{1}[\. ]?\d{1,2}[, ]+\d{1}[\. ]?[a-z]{1}[\. ]?[a-z]{1}|[' +
+        'a-z]{2}\d{2}[a-z]{2})',
+        text)
     if ms:
         sidx = 0
         for m in ms:
@@ -72,7 +73,7 @@ def normalize(text):
     # replace time and and price
     text = re.sub(timepat, ' [value_time] ', text)
     text = re.sub(pricepat, ' [value_price] ', text)
-    #text = re.sub(pricepat2, '[value_price]', text)
+    # text = re.sub(pricepat2, '[value_price]', text)
 
     # replace st.
     text = text.replace(';', ',')
@@ -235,15 +236,3 @@ def sentence_bleu_4(hyp, refs, weights=[0.25, 0.25, 0.25, 0.25]):
     bleu_hyp = bp * math.exp(s)
 
     return bleu_hyp
-
-#if __name__ == '__main__':
-    #text = "restaurant's CB39AL one seven"
-    #text = "I'm I'd restaurant's CB39AL 099939399 one seven"
-    #text = "ndd 19.30 nndd"
-    #print re.match("(\d+).(\d+)", text)
-    #m = re.findall("(\d+\.\d+)", text)
-    #print(m)
-    #print m[0].strip('.')
-    #print re.sub('\.', '', m[0])
-    #print m.groups()
-    #print text

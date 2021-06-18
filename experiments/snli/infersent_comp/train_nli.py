@@ -5,50 +5,57 @@
 # LICENSE file in the root directory of this source tree.
 #
 
+import argparse
 import os
 import sys
 import time
-import argparse
 
 import numpy as np
-from comet_ml import OfflineExperiment
+import pandas as pd
 import torch
-from torch.autograd import Variable
 import torch.nn as nn
+from comet_ml import OfflineExperiment
+from torch.autograd import Variable
 
 from data import get_nli, get_batch, build_vocab, DICO_LABEL
-from mutils import get_optimizer
 from models import NLINet
-import pandas as pd
-from collections import Counter
-import pdb
-
+from mutils import get_optimizer
 
 parser = argparse.ArgumentParser(description='NLI training')
 # paths
-parser.add_argument("--nlipath", type=str, default='datasets/snli/', help="NLI data path (SNLI or MultiNLI)")
-parser.add_argument("--outputdir", type=str, default='savedir/', help="Output directory")
+parser.add_argument("--nlipath", type=str, default='datasets/snli/',
+                    help="NLI data path (SNLI or MultiNLI)")
+parser.add_argument("--outputdir", type=str, default='savedir/',
+                    help="Output directory")
 parser.add_argument("--outputmodelname", type=str, default='model.pickle')
-parser.add_argument("--word_emb_path", type=str, default="dataset/GloVe/glove.840B.300d.txt", help="word embedding file path")
+parser.add_argument("--word_emb_path", type=str,
+                    default="dataset/GloVe/glove.840B.300d.txt",
+                    help="word embedding file path")
 
 # training
 parser.add_argument("--n_epochs", type=int, default=20)
 parser.add_argument("--batch_size", type=int, default=64)
 parser.add_argument("--dpout_model", type=float, default=0., help="encoder dropout")
 parser.add_argument("--dpout_fc", type=float, default=0., help="classifier dropout")
-parser.add_argument("--nonlinear_fc", type=float, default=0, help="use nonlinearity in fc")
-parser.add_argument("--optimizer", type=str, default="sgd,lr=0.1", help="adam or sgd,lr=0.1")
+parser.add_argument("--nonlinear_fc", type=float, default=0,
+                    help="use nonlinearity in fc")
+parser.add_argument("--optimizer", type=str, default="sgd,lr=0.1",
+                    help="adam or sgd,lr=0.1")
 parser.add_argument("--lrshrink", type=float, default=5, help="shrink factor for sgd")
 parser.add_argument("--decay", type=float, default=0.99, help="lr decay")
 parser.add_argument("--minlr", type=float, default=1e-5, help="minimum lr")
-parser.add_argument("--max_norm", type=float, default=5., help="max norm (grad clipping)")
+parser.add_argument("--max_norm", type=float, default=5.,
+                    help="max norm (grad clipping)")
 
 # model
-parser.add_argument("--encoder_type", type=str, default='InferSentV1', help="see list of encoders")
-parser.add_argument("--enc_lstm_dim", type=int, default=2048, help="encoder nhid dimension")
+parser.add_argument("--encoder_type", type=str, default='InferSentV1',
+                    help="see list of encoders")
+parser.add_argument("--enc_lstm_dim", type=int, default=2048,
+                    help="encoder nhid dimension")
 parser.add_argument("--n_enc_layers", type=int, default=1, help="encoder num layers")
 parser.add_argument("--fc_dim", type=int, default=512, help="nhid of fc layers")
-parser.add_argument("--n_classes", type=int, default=7, help="entailment/neutral/contradiction")
+parser.add_argument("--n_classes", type=int, default=7,
+                    help="entailment/neutral/contradiction")
 parser.add_argument("--pool_type", type=str, default='max', help="max or mean")
 
 # gpu
@@ -56,14 +63,17 @@ parser.add_argument("--gpu_id", type=int, default=3, help="GPU ID")
 parser.add_argument("--seed", type=int, default=1234, help="seed")
 
 # data
-parser.add_argument("--word_emb_dim", type=int, default=300, help="word embedding dimension")
-parser.add_argument("--word_emb_type", type=str, default='normal', help="word embedding type, either glove or normal")
+parser.add_argument("--word_emb_dim", type=int, default=300,
+                    help="word embedding dimension")
+parser.add_argument("--word_emb_type", type=str, default='normal',
+                    help="word embedding type, either glove or normal")
 
 # comet
 parser.add_argument("--comet_apikey", type=str, default='', help="comet api key")
 parser.add_argument("--comet_workspace", type=str, default='', help="comet workspace")
 parser.add_argument("--comet_project", type=str, default='', help="comet project name")
-parser.add_argument("--comet_disabled", action='store_true', help="if true, disable comet")
+parser.add_argument("--comet_disabled", action='store_true',
+                    help="if true, disable comet")
 
 params, _ = parser.parse_known_args()
 
@@ -78,17 +88,18 @@ last_path = params.nlipath.split('/')[-2]
 save_folder_name = os.path.join(exp_folder, last_path)
 if not os.path.exists(save_folder_name):
     os.mkdir(save_folder_name)
-params.outputmodelname = os.path.join(save_folder_name, '{}_model.pkl'.format(params.encoder_type))
+params.outputmodelname = os.path.join(save_folder_name,
+                                      '{}_model.pkl'.format(params.encoder_type))
 # print parameters passed, and all parameters
 print('\ntogrep : {0}\n'.format(sys.argv[1:]))
 print(params)
 pr = vars(params)
 
 ex = OfflineExperiment(
-                workspace=pr['comet_workspace'],
-                project_name=pr['comet_project'],
-                disabled=pr['comet_disabled'],
-                offline_directory= os.path.join(save_folder_name,'comet_runs'))
+    workspace=pr['comet_workspace'],
+    project_name=pr['comet_project'],
+    disabled=pr['comet_disabled'],
+    offline_directory=os.path.join(save_folder_name, 'comet_runs'))
 
 ex.log_parameters(pr)
 ex.set_name(pr['encoder_type'])
@@ -109,19 +120,20 @@ DATA
 train, valid, test = get_nli(params.nlipath)
 word_vec = build_vocab(train['s1'] + train['s2'] +
                        valid['s1'] + valid['s2'] +
-                       test['s1'] + test['s2'], params.word_emb_path, emb_dim=params.word_emb_dim,
+                       test['s1'] + test['s2'], params.word_emb_path,
+                       emb_dim=params.word_emb_dim,
                        wtype=params.word_emb_type)
 
 for split in ['s1', 's2']:
     for data_type in ['train', 'valid', 'test']:
         eval(data_type)[split] = np.array([['<s>'] +
-            [word for word in sent.split() if word in word_vec] +
-            ['</s>'] for sent in eval(data_type)[split]])
+                                           [word for word in sent.split() if
+                                            word in word_vec] +
+                                           ['</s>'] for sent in eval(data_type)[split]])
 
 # Train label class balancing
 weights = [2, 2, 2, 0.3, 7, 2, 6]
 # invert the weights by values
-
 
 
 """
@@ -129,19 +141,19 @@ MODEL
 """
 # model config
 config_nli_model = {
-    'n_words'        :  len(word_vec)          ,
-    'word_emb_dim'   :  params.word_emb_dim   ,
-    'enc_lstm_dim'   :  params.enc_lstm_dim   ,
-    'n_enc_layers'   :  params.n_enc_layers   ,
-    'dpout_model'    :  params.dpout_model    ,
-    'dpout_fc'       :  params.dpout_fc       ,
-    'fc_dim'         :  params.fc_dim         ,
-    'bsize'          :  params.batch_size     ,
-    'n_classes'      :  params.n_classes      ,
-    'pool_type'      :  params.pool_type      ,
-    'nonlinear_fc'   :  params.nonlinear_fc   ,
-    'encoder_type'   :  params.encoder_type   ,
-    'use_cuda'       :  True                  ,
+    'n_words': len(word_vec),
+    'word_emb_dim': params.word_emb_dim,
+    'enc_lstm_dim': params.enc_lstm_dim,
+    'n_enc_layers': params.n_enc_layers,
+    'dpout_model': params.dpout_model,
+    'dpout_fc': params.dpout_fc,
+    'fc_dim': params.fc_dim,
+    'bsize': params.batch_size,
+    'n_classes': params.n_classes,
+    'pool_type': params.pool_type,
+    'nonlinear_fc': params.nonlinear_fc,
+    'encoder_type': params.encoder_type,
+    'use_cuda': True,
 
 }
 
@@ -166,7 +178,6 @@ optimizer = optim_fn(nli_net.parameters(), **optim_params)
 # cuda by default
 nli_net.to(device)
 loss_fn.to(device)
-
 
 """
 TRAIN
@@ -193,9 +204,10 @@ def trainepoch(epoch):
     s2 = train['s2'][permutation]
     target = train['label'][permutation]
 
-
-    optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] * params.decay if epoch>1\
-        and 'sgd' in params.optimizer else optimizer.param_groups[0]['lr']
+    optimizer.param_groups[0]['lr'] = optimizer.param_groups[0][
+                                          'lr'] * params.decay if epoch > 1 \
+                                                                  and 'sgd' in params.optimizer else \
+        optimizer.param_groups[0]['lr']
     print('Learning rate : {0}'.format(optimizer.param_groups[0]['lr']))
 
     for stidx in range(0, len(s1), params.batch_size):
@@ -204,8 +216,10 @@ def trainepoch(epoch):
                                      word_vec, params.word_emb_dim)
         s2_batch, s2_len = get_batch(s2[stidx:stidx + params.batch_size],
                                      word_vec, params.word_emb_dim)
-        s1_batch, s2_batch = Variable(s1_batch.to(device)), Variable(s2_batch.to(device))
-        tgt_batch = Variable(torch.LongTensor(target[stidx:stidx + params.batch_size])).to(device)
+        s1_batch, s2_batch = Variable(s1_batch.to(device)), Variable(
+            s2_batch.to(device))
+        tgt_batch = Variable(
+            torch.LongTensor(target[stidx:stidx + params.batch_size])).to(device)
         k = s1_batch.size(1)  # actual batch size
 
         # model forward
@@ -237,30 +251,34 @@ def trainepoch(epoch):
 
         if total_norm > params.max_norm:
             shrink_factor = params.max_norm / total_norm
-        current_lr = optimizer.param_groups[0]['lr'] # current lr (no external "lr", for adam)
-        optimizer.param_groups[0]['lr'] = current_lr * shrink_factor # just for update
+        current_lr = optimizer.param_groups[0][
+            'lr']  # current lr (no external "lr", for adam)
+        optimizer.param_groups[0]['lr'] = current_lr * shrink_factor  # just for update
 
         # optimizer step
         optimizer.step()
         optimizer.param_groups[0]['lr'] = current_lr
 
         if len(all_costs) == 100:
-            logs.append('{0} ; loss {1} ; sentence/s {2} ; words/s {3} ; accuracy train : {4}'.format(
-                            stidx, round(np.mean(all_costs), 2),
-                            int(len(all_costs) * params.batch_size / (time.time() - last_time)),
-                            int(words_count * 1.0 / (time.time() - last_time)),
-                            round(100.*correct/(stidx+k), 2)))
+            logs.append(
+                '{0} ; loss {1} ; sentence/s {2} ; words/s {3} ; accuracy train : {4}'.format(
+                    stidx, round(np.mean(all_costs), 2),
+                    int(len(all_costs) * params.batch_size / (time.time() - last_time)),
+                    int(words_count * 1.0 / (time.time() - last_time)),
+                    round(100. * correct / (stidx + k), 2)))
             print(logs[-1])
             last_time = time.time()
             words_count = 0
             all_costs = []
-    train_acc = round(100 * correct/len(s1), 2)
+    train_acc = round(100 * correct / len(s1), 2)
     print('results : epoch {0} ; mean accuracy train : {1}'
           .format(epoch, train_acc))
     ex.log_metric('train_accuracy', train_acc, step=epoch)
     return train_acc
 
-inv_label = {v:k for k,v in DICO_LABEL.items()}
+
+inv_label = {v: k for k, v in DICO_LABEL.items()}
+
 
 def evaluate(epoch, eval_type='valid', final_eval=False):
     nli_net.eval()
@@ -277,10 +295,14 @@ def evaluate(epoch, eval_type='valid', final_eval=False):
 
     for i in range(0, len(s1), params.batch_size):
         # prepare batch
-        s1_batch, s1_len = get_batch(s1[i:i + params.batch_size], word_vec, params.word_emb_dim)
-        s2_batch, s2_len = get_batch(s2[i:i + params.batch_size], word_vec, params.word_emb_dim)
-        s1_batch, s2_batch = Variable(s1_batch.to(device)), Variable(s2_batch.to(device))
-        tgt_batch = Variable(torch.LongTensor(target[i:i + params.batch_size])).to(device)
+        s1_batch, s1_len = get_batch(s1[i:i + params.batch_size], word_vec,
+                                     params.word_emb_dim)
+        s2_batch, s2_len = get_batch(s2[i:i + params.batch_size], word_vec,
+                                     params.word_emb_dim)
+        s1_batch, s2_batch = Variable(s1_batch.to(device)), Variable(
+            s2_batch.to(device))
+        tgt_batch = Variable(torch.LongTensor(target[i:i + params.batch_size])).to(
+            device)
 
         # model forward
         output = nli_net((s1_batch, s1_len), (s2_batch, s2_len))
@@ -289,7 +311,8 @@ def evaluate(epoch, eval_type='valid', final_eval=False):
         correct += pred.long().eq(tgt_batch.data.long()).cpu().sum().item()
 
         if eval_type == 'test':
-            test_prediction.extend([inv_label[p] for p in pred.long().to('cpu').numpy()])
+            test_prediction.extend(
+                [inv_label[p] for p in pred.long().to('cpu').numpy()])
 
     # save model
     eval_acc = round(100 * correct / len(s1), 2)
@@ -304,13 +327,14 @@ def evaluate(epoch, eval_type='valid', final_eval=False):
     if eval_type == 'valid' and epoch <= params.n_epochs:
         if eval_acc > val_acc_best:
             print('saving model at epoch {0}'.format(epoch))
-            #if not os.path.exists(params.outputdir):
+            # if not os.path.exists(params.outputdir):
             #    os.makedirs(params.outputdir)
             torch.save(nli_net.state_dict(), params.outputmodelname)
             val_acc_best = eval_acc
         else:
             if 'sgd' in params.optimizer:
-                optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] / params.lrshrink
+                optimizer.param_groups[0]['lr'] = optimizer.param_groups[0][
+                                                      'lr'] / params.lrshrink
                 print('Shrinking lr by : {0}. New lr = {1}'
                       .format(params.lrshrink,
                               optimizer.param_groups[0]['lr']))
@@ -325,10 +349,11 @@ def evaluate(epoch, eval_type='valid', final_eval=False):
         target = [inv_label[t] for t in target]
         s1 = [' '.join(s) for s in s1]
         s2 = [' '.join(s) for s in s2]
-        outp = pd.DataFrame({'s_1': s1, 's_2': s2, 'true_target':target, 'predicted': test_prediction})
+        outp = pd.DataFrame(
+            {'s_1': s1, 's_2': s2, 'true_target': target, 'predicted': test_prediction})
         res_file = '{}_{}_outp.csv'.format(last_path, params.encoder_type)
         outp.to_csv(os.path.join(save_folder_name, res_file))
-        #ex.log_asset(file_name=res_file, file_like_object=open(res_file,'r'))
+        # ex.log_asset(file_name=res_file, file_like_object=open(res_file,'r'))
 
     return eval_acc
 
@@ -351,7 +376,7 @@ valid_acc = evaluate(1e6, 'valid', True)
 test_acc = evaluate(0, 'test', True)
 
 res_file = '{}_{}_result.txt'.format(last_path, params.encoder_type)
-with open(os.path.join(save_folder_name, res_file),'w') as fp:
+with open(os.path.join(save_folder_name, res_file), 'w') as fp:
     fp.write("val - {}\ntest - {}\n".format(valid_acc, test_acc))
 # ex.log_asset(file_name=res_file, file_like_object=open(res_file, 'r'))
 

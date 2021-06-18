@@ -5,8 +5,9 @@
 # LICENSE file in the root directory of this source tree.
 #
 
-import re
 import inspect
+import re
+
 from torch import optim
 
 

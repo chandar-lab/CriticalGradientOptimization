@@ -1,12 +1,11 @@
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
+from mpl_toolkits.mplot3d import Axes3D
 
 # coding: utf-8
-
-import sys
-import os
-import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 __all__ = ['Ackley', 'Sphere', 'Rosenbrock', 'Beale', 'GoldsteinPrice', 'Booth',
            'BukinN6', 'Matyas', 'LeviN13', 'ThreeHumpCamel', 'Easom', 'Eggholder',
@@ -56,8 +55,10 @@ class OptimalBasic:
         return -1
 
     def plot(self):
-        x = np.arange(self.min_search_range[0], self.max_search_range[0], self.plot_place, dtype=np.float32)
-        y = np.arange(self.min_search_range[1], self.max_search_range[1], self.plot_place, dtype=np.float32)
+        x = np.arange(self.min_search_range[0], self.max_search_range[0],
+                      self.plot_place, dtype=np.float32)
+        y = np.arange(self.min_search_range[1], self.max_search_range[1],
+                      self.plot_place, dtype=np.float32)
         X, Y = np.meshgrid(x, y)
         Z = []
         for xy_list in zip(X, Y):
@@ -74,8 +75,10 @@ class OptimalBasic:
         plt.show()
 
     def save_fig(self):
-        x = np.arange(self.min_search_range[0], self.max_search_range[0], self.plot_place, dtype=np.float32)
-        y = np.arange(self.min_search_range[1], self.max_search_range[1], self.plot_place, dtype=np.float32)
+        x = np.arange(self.min_search_range[0], self.max_search_range[0],
+                      self.plot_place, dtype=np.float32)
+        y = np.arange(self.min_search_range[1], self.max_search_range[1],
+                      self.plot_place, dtype=np.float32)
         X, Y = np.meshgrid(x, y)
         Z = []
         for xy_list in zip(X, Y):
@@ -106,10 +109,13 @@ class Ackley(OptimalBasic):
 
     def get_func_val(self, variables):
         tmp1 = torch.tensor(20. - 20. * torch.exp(
-            -0.2 * torch.sqrt(1. / self.variable_num * torch.sum(torch.FloatTensor([v * v for v in variables])))))
+            -0.2 * torch.sqrt(1. / self.variable_num * torch.sum(
+                torch.FloatTensor([v * v for v in variables])))))
         pi = torch.acos(torch.zeros(1))
-        tmp2 = torch.tensor(torch.exp(torch.tensor(1.0)) - torch.exp(1. / self.variable_num * torch.sum(
-            torch.FloatTensor([torch.cos(torch.tensor(v * 2.0 * pi)) for v in variables]))))
+        tmp2 = torch.tensor(
+            torch.exp(torch.tensor(1.0)) - torch.exp(1. / self.variable_num * torch.sum(
+                torch.FloatTensor(
+                    [torch.cos(torch.tensor(v * 2.0 * pi)) for v in variables]))))
         return tmp1 + tmp2
 
 
@@ -142,7 +148,8 @@ class Rosenbrock(OptimalBasic):
     def get_func_val(self, variables):
         f = 0
         for i in range(self.variable_num - 1):
-            f += 100 * torch.pow(variables[i + 1] - torch.pow(variables[i], 2), 2) + torch.pow(variables[i] - 1, 2)
+            f += 100 * torch.pow(variables[i + 1] - torch.pow(variables[i], 2),
+                                 2) + torch.pow(variables[i] - 1, 2)
         return f
 
 
@@ -159,8 +166,10 @@ class Beale(OptimalBasic):
 
     def get_func_val(self, variables):
         tmp1 = torch.pow(1.5 - variables[0] + variables[0] * variables[1], 2)
-        tmp2 = torch.pow(2.25 - variables[0] + variables[0] * torch.pow(variables[1], 2), 2)
-        tmp3 = torch.pow(2.625 - variables[0] + variables[0] * torch.pow(variables[1], 3), 2)
+        tmp2 = torch.pow(
+            2.25 - variables[0] + variables[0] * torch.pow(variables[1], 2), 2)
+        tmp3 = torch.pow(
+            2.625 - variables[0] + variables[0] * torch.pow(variables[1], 3), 2)
         return tmp1 + tmp2 + tmp3
 
 
@@ -177,10 +186,12 @@ class GoldsteinPrice(OptimalBasic):
 
     def get_func_val(self, variables):
         tmp1 = (1 + torch.pow(variables[0] + variables[1] + 1, 2) * (
-                19 - 14 * variables[0] + 3 * torch.pow(variables[0], 2) - 14 * variables[1] + 6 * variables[0] *
+                19 - 14 * variables[0] + 3 * torch.pow(variables[0], 2) - 14 *
+                variables[1] + 6 * variables[0] *
                 variables[1] + 3 * torch.pow(variables[1], 2)))
         tmp2 = (30 + (torch.pow(2 * variables[0] - 3 * variables[1], 2) * (
-                18 - 32 * variables[0] + 12 * torch.pow(variables[0], 2) + 48 * variables[1] - 36 * variables[0] *
+                18 - 32 * variables[0] + 12 * torch.pow(variables[0], 2) + 48 *
+                variables[1] - 36 * variables[0] *
                 variables[1] + 27 * torch.pow(variables[1], 2))))
         return tmp1 * tmp2
 
@@ -212,7 +223,8 @@ class BukinN6(OptimalBasic):
         self.func_name = 'BukinN6'
 
     def get_func_val(self, variables):
-        tmp1 = 100 * np.sqrt(np.absolute(variables[1] - 0.01 * np.power(variables[1], 2)))
+        tmp1 = 100 * np.sqrt(
+            np.absolute(variables[1] - 0.01 * np.power(variables[1], 2)))
         tmp2 = 0.01 * np.absolute(variables[0] + 10)
         return tmp1 + tmp2
 
@@ -245,8 +257,10 @@ class LeviN13(OptimalBasic):
 
     def get_func_val(self, variables):
         tmp1 = np.power(np.sin(3 * np.pi * variables[0]), 2)
-        tmp2 = np.power(variables[0] - 1, 2) * (1 + np.power(np.sin(3 * np.pi * variables[1]), 2))
-        tmp3 = np.power(variables[1] - 1, 2) * (1 + np.power(np.sin(2 * np.pi * variables[1]), 2))
+        tmp2 = np.power(variables[0] - 1, 2) * (
+                1 + np.power(np.sin(3 * np.pi * variables[1]), 2))
+        tmp3 = np.power(variables[1] - 1, 2) * (
+                1 + np.power(np.sin(2 * np.pi * variables[1]), 2))
         return tmp1 + tmp2 + tmp3
 
 
@@ -261,7 +275,9 @@ class ThreeHumpCamel(OptimalBasic):
         self.func_name = 'ThreeHumpCamel'
 
     def get_func_val(self, variables):
-        return 2 * np.power(variables[0], 2) - 1.05 * np.power(variables[0], 4) + np.power(variables[0], 6) / 6 + \
+        return 2 * np.power(variables[0], 2) - 1.05 * np.power(variables[0],
+                                                               4) + np.power(
+            variables[0], 6) / 6 + \
                variables[0] * variables[1] + np.power(variables[1], 2)
 
 
@@ -293,8 +309,10 @@ class Eggholder(OptimalBasic):
         self.func_name = 'Eggholder'
 
     def get_func_val(self, variables):
-        tmp1 = -(variables[1] + 47) * np.sin(np.sqrt(np.absolute(variables[1] + variables[0] / 2 + 47)))
-        tmp2 = -variables[0] * np.sin(np.sqrt(np.absolute(variables[0] - (variables[1] + 47))))
+        tmp1 = -(variables[1] + 47) * np.sin(
+            np.sqrt(np.absolute(variables[1] + variables[0] / 2 + 47)))
+        tmp2 = -variables[0] * np.sin(
+            np.sqrt(np.absolute(variables[0] - (variables[1] + 47))))
         return tmp1 + tmp2
 
 
@@ -309,7 +327,8 @@ class McCormick(OptimalBasic):
         self.func_name = 'McCormick'
 
     def get_func_val(self, variables):
-        tmp1 = np.sin(variables[0] + variables[1]) + np.power(variables[0] - variables[1], 2)
+        tmp1 = np.sin(variables[0] + variables[1]) + np.power(
+            variables[0] - variables[1], 2)
         tmp2 = -1.5 * variables[0] + 2.5 * variables[1] + 1
         return tmp1 + tmp2
 
@@ -326,8 +345,10 @@ class SchafferN2(OptimalBasic):
         self.func_name = 'SchafferN2'
 
     def get_func_val(self, variables):
-        tmp1 = np.power(np.sin(np.power(variables[0], 2) - np.power(variables[1], 2)), 2) - 0.5
-        tmp2 = np.power(1 + 0.001 * (np.power(variables[0], 2) + np.power(variables[1], 2)), 2)
+        tmp1 = np.power(np.sin(np.power(variables[0], 2) - np.power(variables[1], 2)),
+                        2) - 0.5
+        tmp2 = np.power(
+            1 + 0.001 * (np.power(variables[0], 2) + np.power(variables[1], 2)), 2)
         return 0.5 + tmp1 / tmp2
 
 
@@ -343,8 +364,11 @@ class SchafferN4(OptimalBasic):
         self.func_name = 'SchafferN4'
 
     def get_func_val(self, variables):
-        tmp1 = np.power(np.cos(np.sin(np.absolute(np.power(variables[0], 2) - np.power(variables[1], 2)))), 2) - 0.5
-        tmp2 = np.power(1 + 0.001 * (np.power(variables[0], 2) + np.power(variables[1], 2)), 2)
+        tmp1 = np.power(np.cos(
+            np.sin(np.absolute(np.power(variables[0], 2) - np.power(variables[1], 2)))),
+            2) - 0.5
+        tmp2 = np.power(
+            1 + 0.001 * (np.power(variables[0], 2) + np.power(variables[1], 2)), 2)
         return 0.5 + tmp1 / tmp2
 
 
@@ -361,7 +385,8 @@ class StyblinskiTang(OptimalBasic):
     def get_func_val(self, variables):
         tmp1 = 0
         for i in range(self.variable_num):
-            tmp1 += np.power(variables[i], 4) - 16 * np.power(variables[i], 2) + 5 * variables[i]
+            tmp1 += np.power(variables[i], 4) - 16 * np.power(variables[i], 2) + 5 * \
+                    variables[i]
         return tmp1 / 2
 
 
@@ -459,7 +484,9 @@ class Ellipsoid(OptimalBasic):
     def get_func_val(self, variables):
         tmp = 0
         for i in range(self.variable_num):
-            tmp += torch.pow(torch.pow(torch.tensor(1000.0), i / (self.variable_num - 1)) * variables[i], 2)
+            tmp += torch.pow(
+                torch.pow(torch.tensor(1000.0), i / (self.variable_num - 1)) *
+                variables[i], 2)
         return tmp
 
 
@@ -498,15 +525,22 @@ class FiveWellPotential(OptimalBasic):
 
     def get_func_val(self, variables):
         tmp1 = []
-        tmp1.append(1 - 1 / (1 + 0.05 * np.power(np.power(variables[0], 2) + (variables[1] - 10), 2)))
-        tmp1.append(-1 / (1 + 0.05 * (np.power(variables[0] - 10, 2) + np.power(variables[1], 2))))
-        tmp1.append(-1 / (1 + 0.03 * (np.power(variables[0] + 10, 2) + np.power(variables[1], 2))))
-        tmp1.append(-1 / (1 + 0.05 * (np.power(variables[0] - 5, 2) + np.power(variables[1] + 10, 2))))
-        tmp1.append(-1 / (1 + 0.1 * (np.power(variables[0] + 5, 2) + np.power(variables[1] + 10, 2))))
+        tmp1.append(1 - 1 / (
+                1 + 0.05 * np.power(np.power(variables[0], 2) + (variables[1] - 10),
+                                    2)))
+        tmp1.append(-1 / (1 + 0.05 * (
+                np.power(variables[0] - 10, 2) + np.power(variables[1], 2))))
+        tmp1.append(-1 / (1 + 0.03 * (
+                np.power(variables[0] + 10, 2) + np.power(variables[1], 2))))
+        tmp1.append(-1 / (1 + 0.05 * (
+                np.power(variables[0] - 5, 2) + np.power(variables[1] + 10, 2))))
+        tmp1.append(-1 / (1 + 0.1 * (
+                np.power(variables[0] + 5, 2) + np.power(variables[1] + 10, 2))))
         tmp1_sum = 0
         for x in tmp1:
             tmp1_sum += x
-        tmp2 = 1 + 0.0001 * np.power((np.power(variables[0], 2) + np.power(variables[1], 2)), 1.2)
+        tmp2 = 1 + 0.0001 * np.power(
+            (np.power(variables[0], 2) + np.power(variables[1], 2)), 1.2)
         return tmp1_sum * tmp2
 
 
@@ -585,7 +619,8 @@ class Michalewicz(OptimalBasic):
         m = 10
         tmp1 = 0
         for i in range(self.variable_num):
-            tmp1 += np.sin(variables[i]) * np.power(np.sin((i + 1) * np.power(variables[i], 2) / np.pi), 2 * m)
+            tmp1 += np.sin(variables[i]) * np.power(
+                np.sin((i + 1) * np.power(variables[i], 2) / np.pi), 2 * m)
         return -tmp1
 
 
@@ -609,7 +644,9 @@ class Perm(OptimalBasic):
         tmp2 = 0
         for j in range(self.variable_num):
             for i in range(self.variable_num):
-                tmp1 += (i + 1 + self.beta) * (np.power(variables[i], j + 1) - np.power(1 / (i + 1), j + 1))
+                tmp1 += (i + 1 + self.beta) * (
+                        np.power(variables[i], j + 1) - np.power(1 / (i + 1),
+                                                                 j + 1))
             tmp2 += np.power(tmp1, 2)
             tmp1 = 0
         return tmp2
@@ -662,8 +699,11 @@ class SixHumpCamel(OptimalBasic):
         self.func_name = 'SixHumpCamel'
 
     def get_func_val(self, variables):
-        return 4 - 2.1 * torch.pow(variables[0], 2) + 1 / 3 * torch.pow(variables[0], 4) * torch.pow(variables[0], 2) + \
-               variables[0] * variables[1] + 4 * (torch.pow(variables[1], 2) - 1) * torch.pow(variables[1], 2)
+        return 4 - 2.1 * torch.pow(variables[0], 2) + 1 / 3 * torch.pow(variables[0],
+                                                                        4) * torch.pow(
+            variables[0], 2) + \
+               variables[0] * variables[1] + 4 * (
+                       torch.pow(variables[1], 2) - 1) * torch.pow(variables[1], 2)
 
 
 ##### Class Shuberts function #####
@@ -710,8 +750,10 @@ class XinSheYang(OptimalBasic):
 class Zakharov(OptimalBasic):
     def __init__(self, variable_num):
         super().__init__(variable_num)
-        self.max_search_range = np.array([1000.] * self.variable_num)  # temporarily set as 1000
-        self.min_search_range = np.array([-1000] * self.variable_num)  # temporarily set as -1000
+        self.max_search_range = np.array(
+            [1000.] * self.variable_num)  # temporarily set as 1000
+        self.min_search_range = np.array(
+            [-1000] * self.variable_num)  # temporarily set as -1000
         self.optimal_solution = np.array([0.] * self.variable_num)
         self.global_optimum_solution = 0.
         self.plot_place = 10.
@@ -741,7 +783,8 @@ def compute_loss(w1=None, w2=None):
 
 # noisy hills of the cost function
 def __f1(x, y):
-    return -1 * torch.sin(x * x) * torch.cos(3 * y * y) * torch.exp(-(x * y) * (x * y)) - torch.exp(-(x + y) * (x + y))
+    return -1 * torch.sin(x * x) * torch.cos(3 * y * y) * torch.exp(
+        -(x * y) * (x * y)) - torch.exp(-(x + y) * (x + y))
 
 
 # bivar gaussian hills of the cost function

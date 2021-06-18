@@ -1,21 +1,25 @@
-from __future__ import division
-""" 
+"""
 Creates a ResNeXt Model as defined in:
 Xie, S., Girshick, R., Dollar, P., Tu, Z., & He, K. (2016). 
 Aggregated residual transformations for deep neural networks. 
 arXiv preprint arXiv:1611.05431.
 import from https://github.com/prlz77/ResNeXt.pytorch/blob/master/models/model.py
 """
+from __future__ import division
+
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
 
 __all__ = ['resnext']
 
+
 class ResNeXtBottleneck(nn.Module):
     """
-    RexNeXt bottleneck type C (https://github.com/facebookresearch/ResNeXt/blob/master/models/resnext.lua)
+    RexNeXt bottleneck type C
+    (https://github.com/facebookresearch/ResNeXt/blob/master/models/resnext.lua)
     """
+
     def __init__(self, in_channels, out_channels, stride, cardinality, widen_factor):
         """ Constructor
         Args:
@@ -27,16 +31,22 @@ class ResNeXtBottleneck(nn.Module):
         """
         super(ResNeXtBottleneck, self).__init__()
         D = cardinality * out_channels // widen_factor
-        self.conv_reduce = nn.Conv2d(in_channels, D, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv_reduce = nn.Conv2d(in_channels, D, kernel_size=1, stride=1, padding=0,
+                                     bias=False)
         self.bn_reduce = nn.BatchNorm2d(D)
-        self.conv_conv = nn.Conv2d(D, D, kernel_size=3, stride=stride, padding=1, groups=cardinality, bias=False)
+        self.conv_conv = nn.Conv2d(D, D, kernel_size=3, stride=stride, padding=1,
+                                   groups=cardinality, bias=False)
         self.bn = nn.BatchNorm2d(D)
-        self.conv_expand = nn.Conv2d(D, out_channels, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv_expand = nn.Conv2d(D, out_channels, kernel_size=1, stride=1,
+                                     padding=0, bias=False)
         self.bn_expand = nn.BatchNorm2d(out_channels)
 
         self.shortcut = nn.Sequential()
         if in_channels != out_channels:
-            self.shortcut.add_module('shortcut_conv', nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0, bias=False))
+            self.shortcut.add_module('shortcut_conv',
+                                     nn.Conv2d(in_channels, out_channels, kernel_size=1,
+                                               stride=stride, padding=0,
+                                               bias=False))
             self.shortcut.add_module('shortcut_bn', nn.BatchNorm2d(out_channels))
 
     def forward(self, x):
@@ -55,6 +65,7 @@ class CifarResNeXt(nn.Module):
     ResNext optimized for the Cifar dataset, as specified in
     https://arxiv.org/pdf/1611.05431.pdf
     """
+
     def __init__(self, cardinality, depth, num_classes, widen_factor=4, dropRate=0):
         """ Constructor
         Args:
@@ -70,7 +81,8 @@ class CifarResNeXt(nn.Module):
         self.widen_factor = widen_factor
         self.num_classes = num_classes
         self.output_size = 64
-        self.stages = [64, 64 * self.widen_factor, 128 * self.widen_factor, 256 * self.widen_factor]
+        self.stages = [64, 64 * self.widen_factor, 128 * self.widen_factor,
+                       256 * self.widen_factor]
 
         self.conv_1_3x3 = nn.Conv2d(3, 64, 3, 1, 1, bias=False)
         self.bn_1 = nn.BatchNorm2d(64)
@@ -90,23 +102,27 @@ class CifarResNeXt(nn.Module):
                 self.state_dict()[key][...] = 0
 
     def block(self, name, in_channels, out_channels, pool_stride=2):
-        """ Stack n bottleneck modules where n is inferred from the depth of the network.
+        """ Stack n bottleneck modules where n is inferred from the depth of the
+        network.
         Args:
             name: string name of the current block.
             in_channels: number of input channels
             out_channels: number of output channels
-            pool_stride: factor to reduce the spatial dimensionality in the first bottleneck of the block.
+            pool_stride: factor to reduce the spatial dimensionality in the first
+                         bottleneck of the block.
         Returns: a Module consisting of n sequential bottlenecks.
         """
         block = nn.Sequential()
         for bottleneck in range(self.block_depth):
             name_ = '%s_bottleneck_%d' % (name, bottleneck)
             if bottleneck == 0:
-                block.add_module(name_, ResNeXtBottleneck(in_channels, out_channels, pool_stride, self.cardinality,
+                block.add_module(name_, ResNeXtBottleneck(in_channels, out_channels,
+                                                          pool_stride, self.cardinality,
                                                           self.widen_factor))
             else:
                 block.add_module(name_,
-                                 ResNeXtBottleneck(out_channels, out_channels, 1, self.cardinality, self.widen_factor))
+                                 ResNeXtBottleneck(out_channels, out_channels, 1,
+                                                   self.cardinality, self.widen_factor))
         return block
 
     def forward(self, x):
@@ -118,6 +134,7 @@ class CifarResNeXt(nn.Module):
         x = F.avg_pool2d(x, 8, 1)
         x = x.view(-1, 1024)
         return self.classifier(x)
+
 
 def resnext(**kwargs):
     """Constructs a ResNeXt.

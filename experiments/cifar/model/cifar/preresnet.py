@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 '''Resnet for cifar dataset.
 Ported form
 https://github.com/facebook/fb.resnet.torch
@@ -7,11 +5,13 @@ and
 https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 (c) YANG, Wei
 '''
+from __future__ import absolute_import
+
 import torch.nn as nn
 import math
 
-
 __all__ = ['preresnet']
+
 
 def conv3x3(in_planes, out_planes, stride=1):
     "3x3 convolution with padding"
@@ -96,11 +96,15 @@ class PreResNet(nn.Module):
         super(PreResNet, self).__init__()
         # Model type specifies number of layers for CIFAR-10 model
         if block_name.lower() == 'basicblock':
-            assert (depth - 2) % 6 == 0, 'When use basicblock, depth should be 6n+2, e.g. 20, 32, 44, 56, 110, 1202'
+            assert (
+                           depth - 2) % 6 == 0, 'When use basicblock, depth should be '\
+                                                '6n+2, e.g. 20, 32, 44, 56, 110, 1202 '
             n = (depth - 2) // 6
             block = BasicBlock
         elif block_name.lower() == 'bottleneck':
-            assert (depth - 2) % 9 == 0, 'When use bottleneck, depth should be 9n+2, e.g. 20, 29, 47, 56, 110, 1199'
+            assert (
+                           depth - 2) % 9 == 0, 'When use bottleneck, depth should be '\
+                                                '9n+2, e.g. 20, 29, 47, 56, 110, 1199 '
             n = (depth - 2) // 9
             block = Bottleneck
         else:

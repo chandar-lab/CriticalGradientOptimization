@@ -7,7 +7,8 @@ from torch.optim import Optimizer
 from .prioritydict import priorityDict
 
 """
-Collection of Experimental optimizers developed during our research. Included for completeness.
+Collection of Experimental optimizers developed during our research. 
+Included for completeness.
 """
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -52,7 +53,8 @@ class SGD_FIFO(Optimizer):
 
         defaults = dict(lr=lr, kappa=kappa, dampening=dampening,
                         weight_decay=weight_decay, momentum=momentum,
-                        aggr=aggr, decay=decay, gradHist={}, topC=topC, sampling=sampling, critical_test=critical_test)
+                        aggr=aggr, decay=decay, gradHist={}, topC=topC,
+                        sampling=sampling, critical_test=critical_test)
 
         super(SGD_FIFO, self).__init__(params, defaults)
         self.resetOfflineStats()
@@ -139,7 +141,8 @@ class SGD_FIFO(Optimizer):
                     if momentum != 0:
                         param_state = self.state[p]
                         if 'momentum_buffer' not in param_state:
-                            buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
+                            buf = param_state['momentum_buffer'] = torch.clone(
+                                d_p).detach()
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
@@ -158,7 +161,8 @@ class Adam_FIFO(Optimizer):
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
                  decay=0.7, kappa=1.0, topC=10,
-                 weight_decay=0, amsgrad=False, aggr='mean', sampling=None, critical_test=True):
+                 weight_decay=0, amsgrad=False, aggr='mean', sampling=None,
+                 critical_test=True):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -176,7 +180,8 @@ class Adam_FIFO(Optimizer):
 
         defaults = dict(lr=lr, betas=betas, eps=eps,
                         weight_decay=weight_decay, aggr=aggr, amsgrad=amsgrad,
-                        kappa=kappa, topC=topC, decay=decay, sampling=sampling, critical_test=critical_test)
+                        kappa=kappa, topC=topC, decay=decay, sampling=sampling,
+                        critical_test=critical_test)
 
         super(Adam_FIFO, self).__init__(params, defaults)
         self.resetOfflineStats()
@@ -219,7 +224,9 @@ class Adam_FIFO(Optimizer):
                 grad = p.grad.data
                 grad_norm = self._count
                 if grad.is_sparse:
-                    raise RuntimeError('Adam does not support sparse gradients, please consider SparseAdam instead')
+                    raise RuntimeError(
+                        'Adam does not support sparse gradients, please consider '
+                        'SparseAdam instead')
                 amsgrad = group['amsgrad']
                 kappa = group['kappa']
                 decay = group['decay']
@@ -234,24 +241,30 @@ class Adam_FIFO(Optimizer):
                 if len(state) == 0:
                     state['step'] = 0
                     # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
+                    state['exp_avg'] = torch.zeros_like(
+                        p.data)  # memory_format=torch.preserve_format)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
+                    state['exp_avg_sq'] = torch.zeros_like(
+                        p.data)  # memory_format=torch.preserve_format)
                     if kappa > 0.:
                         state['critical gradients'] = priorityDict()
-                        state['critical gradients'].setHyper(decay_rate=decay, K=topc, sampling=sampling)
+                        state['critical gradients'].setHyper(decay_rate=decay, K=topc,
+                                                             sampling=sampling)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
-                        state['max_exp_avg_sq'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
+                        state['max_exp_avg_sq'] = torch.zeros_like(
+                            p.data)  # memory_format=torch.preserve_format)
                 else:
                     if kappa > 0.:
                         aggr_grad = aggregate(grad, state['critical gradients'], aggr)
                         if state['critical gradients'].isFull():
                             if critical_test:
-                                if grad_norm > state['critical gradients'].pokeSmallest():
+                                if grad_norm > \
+                                        state['critical gradients'].pokeSmallest():
                                     self.offline_grad['yes'] += 1
-                                    state['critical gradients'][grad_norm] = deepcopy(grad)
+                                    state['critical gradients'][grad_norm] = deepcopy(
+                                        grad)
                                 else:
                                     self.offline_grad['no'] += 1
                             else:
@@ -280,9 +293,11 @@ class Adam_FIFO(Optimizer):
                     # Maintains the maximum of all 2nd moment running avg. till now
                     torch.max(max_exp_avg_sq, exp_avg_sq, out=max_exp_avg_sq)
                     # Use the max. for normalizing running avg. of gradient
-                    denom = (max_exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                    denom = (max_exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(
+                        group['eps'])
                 else:
-                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(
+                        group['eps'])
 
                 step_size = group['lr'] / bias_correction1
 
@@ -290,13 +305,17 @@ class Adam_FIFO(Optimizer):
                 self.g_analysis['count'] += 1
                 self.g_analysis['gt'] += p.grad.data.norm()
                 if 'mid' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMin().norm()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].getMin().norm()
                 elif 'median' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMedian().norm()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].getMedian().norm()
                 elif 'max' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMax().norm()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].getMax().norm()
                 else:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].averageTopC()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].averageTopC()
 
                 p.addcdiv_(exp_avg, denom, value=-step_size)
 
@@ -370,11 +389,14 @@ class RMSprop_FIFO(Optimizer):
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
-                    state['square_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    state['square_avg'] = \
+                        torch.zeros_like(p, memory_format=torch.preserve_format)
                     if group['momentum'] > 0:
-                        state['momentum_buffer'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        state['momentum_buffer'] = \
+                            torch.zeros_like(p, memory_format=torch.preserve_format)
                     if group['centered']:
-                        state['grad_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        state['grad_avg'] = \
+                            torch.zeros_like(p, memory_format=torch.preserve_format)
                     if kappa > 0.:
                         state['critical gradients'] = priorityDict()
                         state['critical gradients'].setHyper(decay_rate=decay, K=topc)
@@ -405,7 +427,8 @@ class RMSprop_FIFO(Optimizer):
                 if group['centered']:
                     grad_avg = state['grad_avg']
                     grad_avg.mul_(alpha).add_(grad, alpha=1 - alpha)
-                    avg = square_avg.addcmul(grad_avg, grad_avg, value=-1).sqrt_().add_(group['eps'])
+                    avg = square_avg.addcmul(grad_avg, grad_avg, value=-1).sqrt_().add_(
+                        group['eps'])
                 else:
                     avg = square_avg.sqrt().add_(group['eps'])
 
@@ -446,7 +469,8 @@ class SGD_C_bottom(Optimizer):
 
         defaults = dict(lr=lr, kappa=kappa, dampening=dampening,
                         weight_decay=weight_decay, momentum=momentum,
-                        aggr=aggr, decay=decay, gradHist={}, topC=topC, sampling=sampling, critical_test=critical_test)
+                        aggr=aggr, decay=decay, gradHist={}, topC=topC,
+                        sampling=sampling, critical_test=critical_test)
 
         super(SGD_C_bottom, self).__init__(params, defaults)
         self.resetOfflineStats()
@@ -536,7 +560,8 @@ class SGD_C_bottom(Optimizer):
                     if momentum != 0:
                         param_state = self.state[p]
                         if 'momentum_buffer' not in param_state:
-                            buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
+                            buf = param_state['momentum_buffer'] = torch.clone(
+                                d_p).detach()
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
@@ -611,7 +636,9 @@ class Adam_C_bottom(Optimizer):
                 grad = p.grad.data
                 grad_norm = 1 / grad.norm()
                 if grad.is_sparse:
-                    raise RuntimeError('Adam does not support sparse gradients, please consider SparseAdam instead')
+                    raise RuntimeError(
+                        'Adam does not support sparse gradients, please consider '
+                        'SparseAdam instead')
                 amsgrad = group['amsgrad']
                 kappa = group['kappa']
                 decay = group['decay']
@@ -624,16 +651,19 @@ class Adam_C_bottom(Optimizer):
                 if len(state) == 0:
                     state['step'] = 0
                     # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
+                    state['exp_avg'] = torch.zeros_like(
+                        p.data)  # memory_format=torch.preserve_format)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
+                    state['exp_avg_sq'] = torch.zeros_like(
+                        p.data)  # memory_format=torch.preserve_format)
                     if kappa > 0.:
                         state['critical gradients'] = priorityDict()
                         state['critical gradients'].setHyper(decay_rate=decay, K=topc)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
-                        state['max_exp_avg_sq'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
+                        state['max_exp_avg_sq'] = torch.zeros_like(
+                            p.data)  # memory_format=torch.preserve_format)
                 else:
                     if kappa > 0.:
                         aggr_grad = aggregate(grad, state['critical gradients'], aggr)
@@ -666,9 +696,11 @@ class Adam_C_bottom(Optimizer):
                     # Maintains the maximum of all 2nd moment running avg. till now
                     torch.max(max_exp_avg_sq, exp_avg_sq, out=max_exp_avg_sq)
                     # Use the max. for normalizing running avg. of gradient
-                    denom = (max_exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                    denom = (max_exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(
+                        group['eps'])
                 else:
-                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(
+                        group['eps'])
 
                 step_size = group['lr'] / bias_correction1
 
@@ -676,13 +708,17 @@ class Adam_C_bottom(Optimizer):
                 self.g_analysis['count'] += 1
                 self.g_analysis['gt'] += p.grad.data.norm()
                 if 'mid' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMin().norm()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].getMin().norm()
                 elif 'median' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMedian().norm()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].getMedian().norm()
                 elif 'max' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMax().norm()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].getMax().norm()
                 else:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].averageTopC()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].averageTopC()
 
                 state['critical gradients'].decay()
 
@@ -743,11 +779,13 @@ class SAGA(Optimizer):
                 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                 param_state = self.state[p]
                 if 'gradient_buffer' not in param_state:
-                    buf = param_state['gradient_buffer'] = torch.zeros(n, *list(d_p.shape))
+                    buf = param_state['gradient_buffer'] = torch.zeros(n,
+                                                                       *list(d_p.shape))
                 else:
                     buf = param_state['gradient_buffer']
 
-                saga_term = torch.mean(buf, dim=0).to(device)  # hold mean and last gradient in saga_term
+                saga_term = torch.mean(buf, dim=0).to(
+                    device)  # hold mean and last gradient in saga_term
 
                 g_i = torch.clone(buf[index]).detach().to(device)
 
@@ -844,14 +882,17 @@ class SGD_C_double(Optimizer):
 
     Where f is either a sum or mean of the gradients in g_crit
 
-    Order of computing update step and updating buffer inverted, leading to double counting.
+    Order of computing update step and updating buffer inverted,
+    leading to double counting.
     """
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
-                 weight_decay=0, momentum=0., decay=0.99, nesterov=False, topC=10, sum='sum'):
+                 weight_decay=0, momentum=0., decay=0.99, nesterov=False, topC=10,
+                 sum='sum'):
 
         defaults = dict(lr=lr, kappa=kappa, dampening=dampening,
-                        weight_decay=weight_decay, momentum=momentum, sum=sum, decay=decay, nesterov=nesterov,
+                        weight_decay=weight_decay, momentum=momentum, sum=sum,
+                        decay=decay, nesterov=nesterov,
                         gradHist={}, topC=topC)
         if nesterov and (momentum <= 0 or dampening != 0):
             raise ValueError("Nesterov momentum requires a momentum and zero dampening")
@@ -917,7 +958,8 @@ class SGD_C_double(Optimizer):
                     if momentum != 0:
                         param_state = self.state[p]
                         if 'momentum_buffer' not in param_state:
-                            buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
+                            buf = param_state['momentum_buffer'] = torch.clone(
+                                d_p).detach()
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
@@ -938,10 +980,12 @@ class SGD_C_Only(Optimizer):
     """
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
-                 weight_decay=0, momentum=0., decay=0.99, nesterov=False, topC=10, sum='sum'):
+                 weight_decay=0, momentum=0., decay=0.99, nesterov=False, topC=10,
+                 sum='sum'):
 
         defaults = dict(lr=lr, kappa=kappa, dampening=dampening,
-                        weight_decay=weight_decay, momentum=momentum, sum=sum, decay=decay, nesterov=nesterov,
+                        weight_decay=weight_decay, momentum=momentum, sum=sum,
+                        decay=decay, nesterov=nesterov,
                         gradHist={}, topC=topC)
         if nesterov and (momentum <= 0 or dampening != 0):
             raise ValueError("Nesterov momentum requires a momentum and zero dampening")
@@ -1010,7 +1054,8 @@ class SGD_C_Only(Optimizer):
                     if momentum != 0:
                         param_state = self.state[p]
                         if 'momentum_buffer' not in param_state:
-                            buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
+                            buf = param_state['momentum_buffer'] = torch.clone(
+                                d_p).detach()
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
@@ -1035,8 +1080,10 @@ class Adam_C_double(Optimizer):
     Order of computing update step and updating buffer inverted, leading to double counting.
     """
 
-    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, decay=0.95, kappa=1.0, topC=10,
-                 weight_decay=0, amsgrad=False, sum='sum', param_level=True):  # decay=0.9
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, decay=0.95,
+                 kappa=1.0, topC=10,
+                 weight_decay=0, amsgrad=False, sum='sum',
+                 param_level=True):  # decay=0.9
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -1046,7 +1093,8 @@ class Adam_C_double(Optimizer):
         if not 0.0 <= betas[1] < 1.0:
             raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
         defaults = dict(lr=lr, betas=betas, eps=eps,
-                        weight_decay=weight_decay, sum=sum, amsgrad=amsgrad, kappa=kappa, topC=topC, decay=decay)
+                        weight_decay=weight_decay, sum=sum, amsgrad=amsgrad,
+                        kappa=kappa, topC=topC, decay=decay)
         super(Adam_C_double, self).__init__(params, defaults)
         self.resetOfflineStats()
 
@@ -1079,7 +1127,8 @@ class Adam_C_double(Optimizer):
                 grad = p.grad.data
                 grad_norm = grad.norm()
                 if grad.is_sparse:
-                    raise RuntimeError('Adam does not support sparse gradients, please consider SparseAdam instead')
+                    raise RuntimeError(
+                        'Adam does not support sparse gradients, please consider SparseAdam instead')
                 amsgrad = group['amsgrad']
                 kappa = group['kappa']
                 decay = group['decay']
@@ -1093,16 +1142,19 @@ class Adam_C_double(Optimizer):
                 if len(state) == 0:
                     state['step'] = 0
                     # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p.data)  # , memory_format=torch.preserve_format)
+                    state['exp_avg'] = torch.zeros_like(
+                        p.data)  # , memory_format=torch.preserve_format)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p.data)  # , memory_format=torch.preserve_format)
+                    state['exp_avg_sq'] = torch.zeros_like(
+                        p.data)  # , memory_format=torch.preserve_format)
                     if kappa > 0.:
                         state['critical gradients'] = priorityDict()
                         state['critical gradients'].setHyper(decay_rate=decay, K=topc)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
-                        state['max_exp_avg_sq'] = torch.zeros_like(p.data)  # , memory_format=torch.preserve_format)
+                        state['max_exp_avg_sq'] = torch.zeros_like(
+                            p.data)  # , memory_format=torch.preserve_format)
                 else:
                     if kappa > 0.:
                         if state['critical gradients'].isFull():
@@ -1134,9 +1186,11 @@ class Adam_C_double(Optimizer):
                     # Maintains the maximum of all 2nd moment running avg. till now
                     torch.max(max_exp_avg_sq, exp_avg_sq, out=max_exp_avg_sq)
                     # Use the max. for normalizing running avg. of gradient
-                    denom = (max_exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                    denom = (max_exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(
+                        group['eps'])
                 else:
-                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(
+                        group['eps'])
 
                 step_size = group['lr'] / bias_correction1
                 state['critical gradients'].decay()
@@ -1161,7 +1215,8 @@ class RMSprop_C_double(Optimizer):
     Order of computing update step and updating buffer inverted, leading to double counting.
     """
 
-    def __init__(self, params, lr=1e-2, alpha=0.99, eps=1e-8, weight_decay=0, momentum=0, centered=False, decay=0.95,
+    def __init__(self, params, lr=1e-2, alpha=0.99, eps=1e-8, weight_decay=0,
+                 momentum=0, centered=False, decay=0.95,
                  kappa=1.0, topC=10, sum='sum'):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -1174,7 +1229,8 @@ class RMSprop_C_double(Optimizer):
         if not 0.0 <= alpha:
             raise ValueError("Invalid alpha value: {}".format(alpha))
 
-        defaults = dict(lr=lr, momentum=momentum, alpha=alpha, eps=eps, centered=centered, weight_decay=weight_decay,
+        defaults = dict(lr=lr, momentum=momentum, alpha=alpha, eps=eps,
+                        centered=centered, weight_decay=weight_decay,
                         sum=sum, kappa=kappa, topC=topC, decay=decay)
         super(RMSprop_C_double, self).__init__(params, defaults)
         self.resetOfflineStats()
@@ -1214,11 +1270,14 @@ class RMSprop_C_double(Optimizer):
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
-                    state['square_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    state['square_avg'] = \
+                        torch.zeros_like(p, memory_format=torch.preserve_format)
                     if group['momentum'] > 0:
-                        state['momentum_buffer'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        state['momentum_buffer'] = \
+                            torch.zeros_like(p, memory_format=torch.preserve_format)
                     if group['centered']:
-                        state['grad_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        state['grad_avg'] = \
+                            torch.zeros_like(p, memory_format=torch.preserve_format)
                     if kappa > 0.:
                         state['critical gradients'] = priorityDict()
                         state['critical gradients'].setHyper(decay_rate=decay, K=topc)
@@ -1250,7 +1309,8 @@ class RMSprop_C_double(Optimizer):
                 if group['centered']:
                     grad_avg = state['grad_avg']
                     grad_avg.mul_(alpha).add_(grad, alpha=1 - alpha)
-                    avg = square_avg.addcmul(grad_avg, grad_avg, value=-1).sqrt_().add_(group['eps'])
+                    avg = square_avg.addcmul(grad_avg, grad_avg, value=-1).sqrt_().add_(
+                        group['eps'])
                 else:
                     avg = square_avg.sqrt().add_(group['eps'])
 
@@ -1284,7 +1344,8 @@ class AggMo_custom(Optimizer):
         if weight_decay < 0.0:
             raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
 
-        defaults = dict(lr=lr, momenta=torch.tensor(momenta).to(device), dampening=dampening,
+        defaults = dict(lr=lr, momenta=torch.tensor(momenta).to(device),
+                        dampening=dampening,
                         weight_decay=weight_decay)
         super(AggMo_custom, self).__init__(params, defaults)
         self.resetOfflineStats()
@@ -1323,7 +1384,8 @@ class AggMo_custom(Optimizer):
                 if len(momenta) != 0 and all(momentum != 0.0 for momentum in momenta):
                     param_state = self.state[p]
                     if 'momentum_buffer' not in param_state:
-                        buf = param_state['momentum_buffer'] = torch.stack([torch.clone(d_p).detach()] * len(momenta))
+                        buf = param_state['momentum_buffer'] = torch.stack(
+                            [torch.clone(d_p).detach()] * len(momenta))
                         vec = param_state['momentum'] = torch.clone(momenta)
                         while vec.dim() < buf.dim(): vec.unsqueeze_(1)
                     else:
@@ -1345,10 +1407,11 @@ class SGD_C_HIST(Optimizer):
     Replaces current-iteration gradient in conventional PyTorch implementation with
     an aggregation of current gradient and critical gradients.
     Conventional SGD or SGD with momentum can be recovered by setting kappa=0.
-    The critical-gradient-specific keyword parameters are tuned for good
-    off-the-shelf performance, though additional tuning may be required for best results.
+    The critical-gradient-specific keyword parameters are tuned for good off-the-shelf
+    performance, though additional tuning may be required for best results.
 
-    This version of SGD_C is designed to maintain each gradient's age and can be used to generate histograms.
+    This version of SGD_C is designed to maintain each gradient's age and can be used to
+    generate histograms.
     """
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
@@ -1394,7 +1457,8 @@ class SGD_C_HIST(Optimizer):
         return (self._age_at_removal, self._age_at_epoch_end)
 
     def epoch(self):
-        param_state = self.state[self.param_groups[0]['params'][0]]  # This is gross but it works
+        param_state = self.state[
+            self.param_groups[0]['params'][0]]  # This is gross but it works
         crit_buf = param_state['critical gradients']
         epoch_ages = crit_buf.epoch()
         for age in epoch_ages:
@@ -1464,7 +1528,8 @@ class SGD_C_HIST(Optimizer):
                     if momentum != 0:
                         param_state = self.state[p]
                         if 'momentum_buffer' not in param_state:
-                            buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
+                            buf = param_state['momentum_buffer'] = torch.clone(
+                                d_p).detach()
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
@@ -1563,7 +1628,8 @@ class AggMo_C(Optimizer):
     Replaces AggMo's computation of several SGDM steps with SGDM_C steps
     """
 
-    def __init__(self, params, lr=0.1, betas=[0.0, 0.9, 0.99], weight_decay=0, dampening=0.0, decay=0.7, topC=10,
+    def __init__(self, params, lr=0.1, betas=[0.0, 0.9, 0.99], weight_decay=0,
+                 dampening=0.0, decay=0.7, topC=10,
                  aggr='sum',
                  sampling=None, critical_test=True, kappa=1.0):
 
@@ -1576,8 +1642,10 @@ class AggMo_C(Optimizer):
         if not 0.0 <= topC:
             raise ValueError("Invalid alpha value: {}".format(topC))
 
-        defaults = dict(lr=lr, weight_decay=weight_decay, betas=betas, kappa=kappa, dampening=dampening,
-                        aggr=aggr, decay=decay, gradHist={}, topC=topC, sampling=sampling, critical_test=critical_test)
+        defaults = dict(lr=lr, weight_decay=weight_decay, betas=betas, kappa=kappa,
+                        dampening=dampening,
+                        aggr=aggr, decay=decay, gradHist={}, topC=topC,
+                        sampling=sampling, critical_test=critical_test)
 
         super(AggMo_C, self).__init__(params, defaults)
         self.resetOfflineStats()

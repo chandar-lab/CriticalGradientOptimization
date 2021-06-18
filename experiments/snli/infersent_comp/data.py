@@ -6,12 +6,13 @@
 #
 
 import os
+import re
+
 import numpy as np
 import torch
-import re
-import torch
 
-DICO_LABEL = {'>': 0,  '<': 1, 'v': 2, '#': 3, '=': 4, '|': 5, '^':6}
+DICO_LABEL = {'>': 0, '<': 1, 'v': 2, '#': 3, '=': 4, '|': 5, '^': 6}
+
 
 def get_batch(batch, word_vec, emb_dim=300):
     # sent in batch in decreasing order of lengths (bsize, max_len, word_dim)
@@ -48,8 +49,9 @@ def get_glove(word_dict, glove_path):
             if word in word_dict:
                 word_vec[word] = np.array(list(map(float, vec.split())))
     print('Found {0}(/{1}) words with glove vectors'.format(
-                len(word_vec), len(word_dict)))
+        len(word_vec), len(word_dict)))
     return word_vec
+
 
 def get_normal(word_dict, emb_dim=300):
     emb = torch.nn.Embedding(len(word_dict), emb_dim)
@@ -58,7 +60,6 @@ def get_normal(word_dict, emb_dim=300):
     for i, word in enumerate(word_dict):
         word_vec[word] = emb_w[i]
     return word_vec
-
 
 
 def build_vocab(vocab_dict, glove_path, emb_dim=300, wtype='glove'):
@@ -86,18 +87,21 @@ def get_nli(data_path):
         target[data_type]['path'] = os.path.join(data_path,
                                                  'labels.' + data_type)
 
-        s1[data_type]['sent'] = [re.sub(' +', ' ', line.rstrip().lstrip().replace('(','').replace(')',''))
-                                 for line in open(s1[data_type]['path'], 'r')]
-        s2[data_type]['sent'] = [re.sub(' +', ' ', line.rstrip().lstrip().replace('(','').replace(')',''))
-                                 for line in open(s2[data_type]['path'], 'r')]
+        s1[data_type]['sent'] = [
+            re.sub(' +', ' ', line.rstrip().lstrip().replace('(', '').replace(')', ''))
+            for line in open(s1[data_type]['path'], 'r')]
+        s2[data_type]['sent'] = [
+            re.sub(' +', ' ', line.rstrip().lstrip().replace('(', '').replace(')', ''))
+            for line in open(s2[data_type]['path'], 'r')]
         target[data_type]['data'] = np.array([dico_label[line.rstrip('\n').lstrip()]
-                for line in open(target[data_type]['path'], 'r')])
+                                              for line in
+                                              open(target[data_type]['path'], 'r')])
 
         assert len(s1[data_type]['sent']) == len(s2[data_type]['sent']) == \
-            len(target[data_type]['data'])
+               len(target[data_type]['data'])
 
         print('** {0} DATA : Found {1} pairs of {2} sentences.'.format(
-                data_type.upper(), len(s1[data_type]['sent']), data_type))
+            data_type.upper(), len(s1[data_type]['sent']), data_type))
 
     train = {'s1': s1['train']['sent'], 's2': s2['train']['sent'],
              'label': target['train']['data']}

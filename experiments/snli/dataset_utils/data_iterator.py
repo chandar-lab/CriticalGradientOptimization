@@ -1,13 +1,15 @@
+import os
+
 import torch
 from torchtext import data
 from torchtext.data import BucketIterator
-import os
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def DataIteratorGlove(
-    data_folder="./datasets/", dataset="snli", batch_size=2, max_length=200, prefix=""
+        data_folder="./datasets/", dataset="snli", batch_size=2, max_length=200,
+        prefix=""
 ):
     TEXT = data.Field(
         fix_length=None,
@@ -66,7 +68,6 @@ def DataIteratorGlove(
         device=device,
     )
 
-    # return train_dialog_iter, valid_dialog_iter, test_dialog_iter, TEXT.vocab.stoi['<pad>'], len(TEXT.vocab), TEXT.vocab.itos#TEXT.vocab
     return (
         train_dialog_iter,
         None,

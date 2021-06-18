@@ -1,16 +1,16 @@
 import os
-import numpy as np
 import random
 import sys
-import wandb
+from itertools import product
+
+import numpy as np
 import torch
 import torch.nn as nn
-
+import wandb
 from joblib import Memory
 from sklearn.datasets import load_svmlight_file
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from itertools import product
+from sklearn.preprocessing import StandardScaler
 
 sys.path.append('../..')
 from optimizers.optim import SGD_C, SGD, Adam_C, Adam, RMSprop, RMSprop_C
@@ -77,7 +77,8 @@ def HyperEvaluate(config):
         X = X[np.random.randint(X.shape[0], size=5000), :]
         y = 0.5 * y[np.random.randint(y.shape[0], size=5000)] + 0.5
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1234)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2,
+                                                        random_state=1234)
 
     # Preprocessing step
 
@@ -100,23 +101,31 @@ def HyperEvaluate(config):
     if config['optim'] == 'SGD':
         optimizer = SGD(model.parameters(), lr=config['lr'], weight_decay=weight_decay)
     elif config['optim'] == 'SGDM':
-        optimizer = SGD(model.parameters(), lr=config['lr'], momentum=0.9, weight_decay=weight_decay)
+        optimizer = SGD(model.parameters(), lr=config['lr'], momentum=0.9,
+                        weight_decay=weight_decay)
     elif config['optim'] == 'SGD_C':
-        optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'], topC=config['topC'],
+        optimizer = SGD_C(model.parameters(), lr=config['lr'], decay=config['decay'],
+                          topC=config['topC'],
                           aggr=config['aggr'], weight_decay=weight_decay)
     elif config['optim'] == 'SGDM_C':
-        optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9, decay=config['decay'], topC=config['topC'],
+        optimizer = SGD_C(model.parameters(), lr=config['lr'], momentum=0.9,
+                          decay=config['decay'], topC=config['topC'],
                           aggr=config['aggr'], weight_decay=weight_decay)
     elif config['optim'] == 'Adam_C':
-        optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                           topC=config['topC'], aggr=config['aggr'], weight_decay=weight_decay)
+        optimizer = Adam_C(model.parameters(), lr=config['lr'], decay=config['decay'],
+                           kappa=config['kappa'],
+                           topC=config['topC'], aggr=config['aggr'],
+                           weight_decay=weight_decay)
     elif config['optim'] == 'Adam':
         optimizer = Adam(model.parameters(), lr=config['lr'], weight_decay=weight_decay)
     elif config['optim'] == 'RMSprop':
-        optimizer = RMSprop(model.parameters(), lr=config['lr'], weight_decay=weight_decay)
+        optimizer = RMSprop(model.parameters(), lr=config['lr'],
+                            weight_decay=weight_decay)
     elif config['optim'] == 'RMSprop_C':
-        optimizer = RMSprop_C(model.parameters(), lr=config['lr'], decay=config['decay'], kappa=config['kappa'],
-                              topC=config['topC'], aggr=config['aggr'], weight_decay=weight_decay)
+        optimizer = RMSprop_C(model.parameters(), lr=config['lr'],
+                              decay=config['decay'], kappa=config['kappa'],
+                              topC=config['topC'], aggr=config['aggr'],
+                              weight_decay=weight_decay)
     criterion = nn.CrossEntropyLoss().to(device)
 
     for epoch in range(N_EPOCHS):

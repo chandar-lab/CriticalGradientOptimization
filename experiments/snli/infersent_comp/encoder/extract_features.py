@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-import os
-import torch
 import argparse
+import os
 
 import numpy as np
+import torch
+
 from models import InferSent
 
 if __name__ == '__main__':

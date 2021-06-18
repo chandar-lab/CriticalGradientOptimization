@@ -9,9 +9,9 @@
 This file contains the definition of encoders used in https://arxiv.org/pdf/1705.02364.pdf
 """
 
-import numpy as np
 import time
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -23,9 +23,10 @@ import torch.nn as nn
 BLSTM (max/mean) encoder
 """
 
+
 class InferSent(nn.Module):
 
-    def __init__(self, config, device = 'cuda'):
+    def __init__(self, config, device='cuda'):
         super(InferSent, self).__init__()
         self.bsize = config['bsize']
         self.word_emb_dim = config['word_emb_dim']
@@ -34,7 +35,8 @@ class InferSent(nn.Module):
         self.dpout_model = config['dpout_model']
         self.version = 1 if 'version' not in config else config['version']
 
-        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim, config['n_enc_layers'],
+        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim,
+                                config['n_enc_layers'],
                                 bidirectional=True, dropout=self.dpout_model)
 
         assert self.version in [1, 2]
@@ -61,7 +63,7 @@ class InferSent(nn.Module):
 
         # Sort by length (keep idx)
         sent_len_sorted, idx_sort = torch.sort(sent_len, descending=True)
-        #sent_len_sorted = sent_len_sorted.copy()
+        # sent_len_sorted = sent_len_sorted.copy()
         idx_unsort = torch.sort(idx_sort)[1]
 
         idx_sort = idx_sort.to(self.device)
@@ -78,7 +80,7 @@ class InferSent(nn.Module):
 
         # Pooling
         if self.pool_type == "mean":
-            #sent_len = torch.FloatTensor(sent_len.copy()).unsqueeze(1).to(device)
+            # sent_len = torch.FloatTensor(sent_len.copy()).unsqueeze(1).to(device)
             emb = torch.sum(sent_output, 0).squeeze(0)
             emb = emb / sent_len.expand_as(emb)
         elif self.pool_type == "max":
@@ -89,7 +91,7 @@ class InferSent(nn.Module):
                 emb = emb.squeeze(0)
                 assert emb.ndimension() == 2
 
-        return emb, sent_output.permute(1,0,2)
+        return emb, sent_output.permute(1, 0, 2)
 
     def set_w2v_path(self, w2v_path):
         self.w2v_path = w2v_path
@@ -165,7 +167,8 @@ class InferSent(nn.Module):
             self.word_vec.update(new_word_vec)
         else:
             new_word_vec = []
-        print('New vocab size : %s (added %s words)'% (len(self.word_vec), len(new_word_vec)))
+        print('New vocab size : %s (added %s words)' % (
+            len(self.word_vec), len(new_word_vec)))
 
     def get_batch(self, batch):
         # sent in batch in decreasing order of lengths
@@ -206,7 +209,7 @@ class InferSent(nn.Module):
         n_wk = np.sum(lengths)
         if verbose:
             print('Nb words kept : %s/%s (%.1f%s)' % (
-                        n_wk, n_w, 100.0 * n_wk / n_w, '%'))
+                n_wk, n_w, 100.0 * n_wk / n_w, '%'))
 
         # sort by decreasing length
         lengths, idx_sort = torch.sort(lengths)[0], torch.sort(-lengths)[1]
@@ -217,7 +220,7 @@ class InferSent(nn.Module):
     def encode(self, sentences, bsize=64, tokenize=True, verbose=False):
         tic = time.time()
         sentences, lengths, idx_sort = self.prepare_samples(
-                        sentences, bsize, tokenize, verbose)
+            sentences, bsize, tokenize, verbose)
 
         embeddings = []
         for stidx in range(0, len(sentences), bsize):
@@ -225,7 +228,8 @@ class InferSent(nn.Module):
             if self.is_cuda():
                 batch = batch.to(self.device)
             with torch.no_grad():
-                batch = self.forward((batch, lengths[stidx:stidx + bsize])).data.cpu().numpy()
+                batch = self.forward(
+                    (batch, lengths[stidx:stidx + bsize])).data.cpu().numpy()
             embeddings.append(batch)
         embeddings = np.vstack(embeddings)
 
@@ -235,14 +239,15 @@ class InferSent(nn.Module):
 
         if verbose:
             print('Speed : %.1f sentences/s (%s mode, bsize=%s)' % (
-                    len(embeddings)/(time.time()-tic),
-                    'gpu' if self.is_cuda() else 'cpu', bsize))
+                len(embeddings) / (time.time() - tic),
+                'gpu' if self.is_cuda() else 'cpu', bsize))
         return embeddings
 
     def visualize(self, sent, tokenize=True):
 
         sent = sent.split() if not tokenize else self.tokenize(sent)
-        sent = [[self.bos] + [word for word in sent if word in self.word_vec] + [self.eos]]
+        sent = [
+            [self.bos] + [word for word in sent if word in self.word_vec] + [self.eos]]
 
         if ' '.join(sent[0]) == '%s %s' % (self.bos, self.eos):
             import warnings
@@ -270,13 +275,14 @@ class InferSent(nn.Module):
 
         return output, idxs
 
+
 """
 BiGRU encoder (first/last hidden states)
 """
 
 
 class BGRUlastEncoder(nn.Module):
-    def __init__(self, config, device = 'cuda'):
+    def __init__(self, config, device='cuda'):
         super(BGRUlastEncoder, self).__init__()
         self.bsize = config['bsize']
         self.word_emb_dim = config['word_emb_dim']
@@ -284,7 +290,8 @@ class BGRUlastEncoder(nn.Module):
         self.pool_type = config['pool_type']
         self.dpout_model = config['dpout_model']
 
-        self.enc_lstm = nn.GRU(self.word_emb_dim, self.enc_lstm_dim, config['n_enc_layers'],
+        self.enc_lstm = nn.GRU(self.word_emb_dim, self.enc_lstm_dim,
+                               config['n_enc_layers'],
                                bidirectional=True, dropout=self.dpout_model)
         self.device = device
 
@@ -295,7 +302,7 @@ class BGRUlastEncoder(nn.Module):
         sent, sent_len = sent_tuple
         sent_len = sent_len.cpu()
         # Sort by length (keep idx)
-        #sent_len, idx_sort = torch.sort(sent_len, descending=True)
+        # sent_len, idx_sort = torch.sort(sent_len, descending=True)
         sent_len, idx_sort = np.sort(sent_len)[::-1], np.argsort(-sent_len)
         sent = sent.index_select(1, torch.LongTensor(idx_sort).to(self.device))
         sent_len = np.array(sent_len)
@@ -304,7 +311,8 @@ class BGRUlastEncoder(nn.Module):
         sent_packed = nn.utils.rnn.pack_padded_sequence(sent, sent_len)
         sent_output, hn = self.enc_lstm(sent_packed)
         emb = torch.cat((hn[0], hn[1]), 1)  # batch x 2*nhid
-        sent_output_un, _ = torch.nn.utils.rnn.pad_packed_sequence(sent_output, batch_first=True)
+        sent_output_un, _ = torch.nn.utils.rnn.pad_packed_sequence(sent_output,
+                                                                   batch_first=True)
 
         # Un-sort by length
         idx_unsort = torch.sort(idx_sort)[1]
@@ -319,7 +327,7 @@ BLSTM encoder with projection after BiLSTM
 
 
 class BLSTMprojEncoder(nn.Module):
-    def __init__(self, config, device = 'cuda'):
+    def __init__(self, config, device='cuda'):
         super(BLSTMprojEncoder, self).__init__()
         self.bsize = config['bsize']
         self.word_emb_dim = config['word_emb_dim']
@@ -327,9 +335,11 @@ class BLSTMprojEncoder(nn.Module):
         self.pool_type = config['pool_type']
         self.dpout_model = config['dpout_model']
 
-        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim, config['n_enc_layers'],
+        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim,
+                                config['n_enc_layers'],
                                 bidirectional=True, dropout=self.dpout_model)
-        self.proj_enc = nn.Linear(2*self.enc_lstm_dim, 2*self.enc_lstm_dim, bias=False)
+        self.proj_enc = nn.Linear(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim,
+                                  bias=False)
         self.device = device
 
     def forward(self, sent_tuple):
@@ -340,7 +350,7 @@ class BLSTMprojEncoder(nn.Module):
         bsize = sent.size(1)
         sent_len = sent_len.cpu()
         # Sort by length (keep idx)
-        #sent_len, idx_sort = torch.sort(sent_len, descending=True)
+        # sent_len, idx_sort = torch.sort(sent_len, descending=True)
         sent_len, idx_sort = np.sort(sent_len)[::-1], np.argsort(-sent_len)
         sent = sent.index_select(1, torch.LongTensor(idx_sort).to(self.device))
         sent_len = np.array(sent_len)
@@ -353,9 +363,11 @@ class BLSTMprojEncoder(nn.Module):
 
         # Un-sort by length
         idx_unsort = np.argsort(idx_sort)
-        sent_output = sent_output.index_select(1, torch.LongTensor(idx_unsort).to(self.device))
+        sent_output = sent_output.index_select(1, torch.LongTensor(idx_unsort).to(
+            self.device))
 
-        sent_output = self.proj_enc(sent_output.view(-1, 2*self.enc_lstm_dim)).view(-1, bsize, 2*self.enc_lstm_dim)
+        sent_output = self.proj_enc(sent_output.view(-1, 2 * self.enc_lstm_dim)).view(
+            -1, bsize, 2 * self.enc_lstm_dim)
         # Pooling
         if self.pool_type == "mean":
             sent_len = torch.FloatTensor(sent_len).unsqueeze(1).to(self.device)
@@ -364,7 +376,7 @@ class BLSTMprojEncoder(nn.Module):
         elif self.pool_type == "max":
             emb = torch.max(sent_output, 0)[0].squeeze(0)
 
-        return emb, sent_output.permute(1,0,2)
+        return emb, sent_output.permute(1, 0, 2)
 
 
 """
@@ -373,7 +385,7 @@ LSTM encoder
 
 
 class LSTMEncoder(nn.Module):
-    def __init__(self, config, device = 'cuda'):
+    def __init__(self, config, device='cuda'):
         super(LSTMEncoder, self).__init__()
         self.bsize = config['bsize']
         self.word_emb_dim = config['word_emb_dim']
@@ -381,7 +393,8 @@ class LSTMEncoder(nn.Module):
         self.pool_type = config['pool_type']
         self.dpout_model = config['dpout_model']
 
-        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim, config['n_enc_layers'],
+        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim,
+                                config['n_enc_layers'],
                                 bidirectional=False, dropout=self.dpout_model)
         self.device = device
 
@@ -393,7 +406,7 @@ class LSTMEncoder(nn.Module):
         sent_len = sent_len.cpu()
 
         # Sort by length (keep idx)
-        #sent_len, idx_sort = torch.sort(sent_len, descending=True)
+        # sent_len, idx_sort = torch.sort(sent_len, descending=True)
         sent_len, idx_sort = np.sort(sent_len)[::-1], np.argsort(-sent_len)
         sent = sent.index_select(1, torch.LongTensor(idx_sort).to(self.device))
 
@@ -403,7 +416,8 @@ class LSTMEncoder(nn.Module):
         sent_output, hn = self.enc_lstm(sent_packed)  # batch x 2*nhid
         sent_hn = hn[0].squeeze(0)
         # Un-sort by length
-        sent_output_un, _ = torch.nn.utils.rnn.pad_packed_sequence(sent_output, batch_first=True)
+        sent_output_un, _ = torch.nn.utils.rnn.pad_packed_sequence(sent_output,
+                                                                   batch_first=True)
         idx_unsort = np.argsort(idx_sort)
         emb = sent_hn.index_select(0, torch.LongTensor(idx_unsort).to(self.device))
 
@@ -416,15 +430,16 @@ GRU encoder
 
 
 class GRUEncoder(nn.Module):
-    def __init__(self, config, device = 'cuda'):
+    def __init__(self, config, device='cuda'):
         super(GRUEncoder, self).__init__()
         self.bsize = config['bsize']
-        self.word_emb_dim =  config['word_emb_dim']
+        self.word_emb_dim = config['word_emb_dim']
         self.enc_lstm_dim = config['enc_lstm_dim']
         self.pool_type = config['pool_type']
         self.dpout_model = config['dpout_model']
 
-        self.enc_lstm = nn.GRU(self.word_emb_dim, self.enc_lstm_dim, config['n_enc_layers'],
+        self.enc_lstm = nn.GRU(self.word_emb_dim, self.enc_lstm_dim,
+                               config['n_enc_layers'],
                                bidirectional=False, dropout=self.dpout_model)
         self.device = device
 
@@ -436,7 +451,7 @@ class GRUEncoder(nn.Module):
         sent_len = sent_len.cpu()
 
         # Sort by length (keep idx)
-        #sent_len, idx_sort = torch.sort(sent_len, descending=True)
+        # sent_len, idx_sort = torch.sort(sent_len, descending=True)
         sent_len, idx_sort = np.sort(sent_len)[::-1], np.argsort(-sent_len)
         sent = sent.index_select(1, torch.LongTensor(idx_sort).to(self.device))
         sent_len = np.array(sent_len)
@@ -462,19 +477,21 @@ Inner attention from "hierarchical attention for document classification"
 
 
 class InnerAttentionNAACLEncoder(nn.Module):
-    def __init__(self, config, device = 'cuda'):
+    def __init__(self, config, device='cuda'):
         super(InnerAttentionNAACLEncoder, self).__init__()
         self.bsize = config['bsize']
         self.word_emb_dim = config['word_emb_dim']
         self.enc_lstm_dim = config['enc_lstm_dim']
         self.pool_type = config['pool_type']
 
+        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim,
+                                config['n_enc_layers'], bidirectional=True)
 
-        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim, config['n_enc_layers'], bidirectional=True)
-
-        self.proj_key = nn.Linear(2*self.enc_lstm_dim, 2*self.enc_lstm_dim, bias=False)
-        self.proj_lstm = nn.Linear(2*self.enc_lstm_dim, 2*self.enc_lstm_dim, bias=False)
-        self.query_embedding = nn.Embedding(1, 2*self.enc_lstm_dim)
+        self.proj_key = nn.Linear(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim,
+                                  bias=False)
+        self.proj_lstm = nn.Linear(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim,
+                                   bias=False)
+        self.query_embedding = nn.Embedding(1, 2 * self.enc_lstm_dim)
         self.softmax = nn.Softmax()
         self.device = device
 
@@ -497,28 +514,34 @@ class InnerAttentionNAACLEncoder(nn.Module):
         sent_output = nn.utils.rnn.pad_packed_sequence(sent_output)[0]
         # Un-sort by length
         idx_unsort = np.argsort(idx_sort)
-        sent_output = sent_output.index_select(1, torch.LongTensor(idx_unsort).to(self.device))
+        sent_output = sent_output.index_select(1, torch.LongTensor(idx_unsort).to(
+            self.device))
 
-        sent_output = sent_output.transpose(0,1).contiguous()
+        sent_output = sent_output.transpose(0, 1).contiguous()
 
         sent_output_proj = self.proj_lstm(sent_output.view(-1,
-            2*self.enc_lstm_dim)).view(bsize, -1, 2*self.enc_lstm_dim)
+                                                           2 * self.enc_lstm_dim)).view(
+            bsize, -1,
+            2 * self.enc_lstm_dim)
 
         sent_key_proj = self.proj_key(sent_output.view(-1,
-            2*self.enc_lstm_dim)).view(bsize, -1, 2*self.enc_lstm_dim)
+                                                       2 * self.enc_lstm_dim)).view(
+            bsize, -1, 2 * self.enc_lstm_dim)
 
         sent_key_proj = torch.tanh(sent_key_proj)
         # NAACL paper: u_it=tanh(W_w.h_it + b_w)  (bsize, seqlen, 2nhid)
 
-        sent_w = self.query_embedding(torch.LongTensor(bsize*[0]).to(self.device)).unsqueeze(2) #(bsize, 2*nhid, 1)
+        sent_w = self.query_embedding(
+            torch.LongTensor(bsize * [0]).to(self.device)).unsqueeze(
+            2)  # (bsize, 2*nhid, 1)
 
         Temp = 2
         keys = sent_key_proj.bmm(sent_w).squeeze(2) / Temp
 
         # Set probas of padding to zero in softmax
-        keys = keys + ((keys == 0).float()*-10000)
+        keys = keys + ((keys == 0).float() * -10000)
 
-        alphas = self.softmax(keys/Temp).unsqueeze(2).expand_as(sent_output)
+        alphas = self.softmax(keys / Temp).unsqueeze(2).expand_as(sent_output)
         # if int(time.time()) % 100 == 0:
         #     print('w', torch.max(sent_w), torch.min(sent_w))
         #     print('alphas', alphas[0, :, 0])
@@ -533,18 +556,21 @@ Inner attention inspired from "Self-attentive ..."
 
 
 class InnerAttentionMILAEncoder(nn.Module):
-    def __init__(self, config, device = 'cuda'):
+    def __init__(self, config, device='cuda'):
         super(InnerAttentionMILAEncoder, self).__init__()
         self.bsize = config['bsize']
-        self.word_emb_dim =  config['word_emb_dim']
+        self.word_emb_dim = config['word_emb_dim']
         self.enc_lstm_dim = config['enc_lstm_dim']
         self.pool_type = config['pool_type']
 
-        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim, config['n_enc_layers'], bidirectional=True)
+        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim,
+                                config['n_enc_layers'], bidirectional=True)
 
-        self.proj_key = nn.Linear(2*self.enc_lstm_dim, 2*self.enc_lstm_dim, bias=False)
-        self.proj_lstm = nn.Linear(2*self.enc_lstm_dim, 2*self.enc_lstm_dim, bias=False)
-        self.query_embedding = nn.Embedding(2, 2*self.enc_lstm_dim)
+        self.proj_key = nn.Linear(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim,
+                                  bias=False)
+        self.proj_lstm = nn.Linear(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim,
+                                   bias=False)
+        self.query_embedding = nn.Embedding(2, 2 * self.enc_lstm_dim)
         self.softmax = nn.Softmax()
         self.device = 'cuda'
 
@@ -566,46 +592,56 @@ class InnerAttentionMILAEncoder(nn.Module):
         sent_output = nn.utils.rnn.pad_packed_sequence(sent_output)[0]
         # Un-sort by length
         idx_unsort = np.argsort(idx_sort)
-        sent_output = sent_output.index_select(1, torch.LongTensor(idx_unsort).to(self.device))
+        sent_output = sent_output.index_select(1, torch.LongTensor(idx_unsort).to(
+            self.device))
 
-        sent_output = sent_output.transpose(0,1).contiguous()
+        sent_output = sent_output.transpose(0, 1).contiguous()
         sent_output_proj = self.proj_lstm(sent_output.view(-1,
-            2*self.enc_lstm_dim)).view(bsize, -1, 2*self.enc_lstm_dim)
+                                                           2 * self.enc_lstm_dim)).view(
+            bsize, -1,
+            2 * self.enc_lstm_dim)
         sent_key_proj = self.proj_key(sent_output.view(-1,
-            2*self.enc_lstm_dim)).view(bsize, -1, 2*self.enc_lstm_dim)
+                                                       2 * self.enc_lstm_dim)).view(
+            bsize, -1, 2 * self.enc_lstm_dim)
         sent_key_proj = torch.tanh(sent_key_proj)
         # NAACL : u_it=tanh(W_w.h_it + b_w) like in NAACL paper
 
         # Temperature
         Temp = 3
 
-        sent_w1 = self.query_embedding(torch.LongTensor(bsize*[0]).to(self.device)).unsqueeze(2) #(bsize, nhid, 1)
+        sent_w1 = self.query_embedding(
+            torch.LongTensor(bsize * [0]).to(self.device)).unsqueeze(
+            2)  # (bsize, nhid, 1)
         keys1 = sent_key_proj.bmm(sent_w1).squeeze(2) / Temp
-        keys1 = keys1 + ((keys1 == 0).float()*-1000)
+        keys1 = keys1 + ((keys1 == 0).float() * -1000)
         alphas1 = self.softmax(keys1).unsqueeze(2).expand_as(sent_key_proj)
         emb1 = torch.sum(alphas1 * sent_output_proj, 1).squeeze(1)
 
-
-        sent_w2 = self.query_embedding(torch.LongTensor(bsize*[1]).to(self.device)).unsqueeze(2) #(bsize, nhid, 1)
+        sent_w2 = self.query_embedding(
+            torch.LongTensor(bsize * [1]).to(self.device)).unsqueeze(
+            2)  # (bsize, nhid, 1)
         keys2 = sent_key_proj.bmm(sent_w2).squeeze(2) / Temp
-        keys2 = keys2 + ((keys2 == 0).float()*-1000)
+        keys2 = keys2 + ((keys2 == 0).float() * -1000)
         alphas2 = self.softmax(keys2).unsqueeze(2).expand_as(sent_key_proj)
         emb2 = torch.sum(alphas2 * sent_output_proj, 1).squeeze(1)
 
-        sent_w3 = self.query_embedding(torch.LongTensor(bsize*[1]).to(self.device)).unsqueeze(2) #(bsize, nhid, 1)
+        sent_w3 = self.query_embedding(
+            torch.LongTensor(bsize * [1]).to(self.device)).unsqueeze(
+            2)  # (bsize, nhid, 1)
         keys3 = sent_key_proj.bmm(sent_w3).squeeze(2) / Temp
-        keys3 = keys3 + ((keys3 == 0).float()*-1000)
+        keys3 = keys3 + ((keys3 == 0).float() * -1000)
         alphas3 = self.softmax(keys3).unsqueeze(2).expand_as(sent_key_proj)
         emb3 = torch.sum(alphas3 * sent_output_proj, 1).squeeze(1)
 
-        sent_w4 = self.query_embedding(torch.LongTensor(bsize*[1]).to(self.device)).unsqueeze(2) #(bsize, nhid, 1)
+        sent_w4 = self.query_embedding(
+            torch.LongTensor(bsize * [1]).to(self.device)).unsqueeze(
+            2)  # (bsize, nhid, 1)
         keys4 = sent_key_proj.bmm(sent_w4).squeeze(2) / Temp
-        keys4 = keys4 + ((keys4 == 0).float()*-1000)
+        keys4 = keys4 + ((keys4 == 0).float() * -1000)
         alphas4 = self.softmax(keys4).unsqueeze(2).expand_as(sent_key_proj)
         emb4 = torch.sum(alphas4 * sent_output_proj, 1).squeeze(1)
 
-
-        #if int(time.time()) % 100 == 0:
+        # if int(time.time()) % 100 == 0:
         #    print('alphas', torch.cat((alphas1.data[0, :, 0],
         #                               alphas2.data[0, :, 0],
         #                               torch.abs(alphas1.data[0, :, 0] -
@@ -621,24 +657,25 @@ Inner attention from Yang et al.
 
 
 class InnerAttentionYANGEncoder(nn.Module):
-    def __init__(self, config, device = 'cuda'):
+    def __init__(self, config, device='cuda'):
         super(InnerAttentionYANGEncoder, self).__init__()
         self.bsize = config['bsize']
         self.word_emb_dim = config['word_emb_dim']
         self.enc_lstm_dim = config['enc_lstm_dim']
         self.pool_type = config['pool_type']
 
-        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim, config['n_enc_layers'],
+        self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim,
+                                config['n_enc_layers'],
                                 bidirectional=True)
 
-        self.proj_lstm = nn.Linear(2*self.enc_lstm_dim, 2*self.enc_lstm_dim,
+        self.proj_lstm = nn.Linear(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim,
                                    bias=True)
-        self.proj_query = nn.Linear(2*self.enc_lstm_dim, 2*self.enc_lstm_dim,
+        self.proj_query = nn.Linear(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim,
                                     bias=True)
-        self.proj_enc = nn.Linear(2*self.enc_lstm_dim, 2*self.enc_lstm_dim,
+        self.proj_enc = nn.Linear(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim,
                                   bias=True)
 
-        self.query_embedding = nn.Embedding(1, 2*self.enc_lstm_dim)
+        self.query_embedding = nn.Embedding(1, 2 * self.enc_lstm_dim)
         self.softmax = nn.Softmax()
         self.device = device
 
@@ -661,15 +698,20 @@ class InnerAttentionYANGEncoder(nn.Module):
         sent_output = nn.utils.rnn.pad_packed_sequence(sent_output)[0]
         # Un-sort by length
         idx_unsort = np.argsort(idx_sort)
-        sent_output = sent_output.index_select(1, torch.LongTensor(idx_unsort).to(self.device))
+        sent_output = sent_output.index_select(1, torch.LongTensor(idx_unsort).to(
+            self.device))
 
-        sent_output = sent_output.transpose(0,1).contiguous()
+        sent_output = sent_output.transpose(0, 1).contiguous()
 
         sent_output_proj = self.proj_lstm(sent_output.view(-1,
-            2*self.enc_lstm_dim)).view(bsize, -1, 2*self.enc_lstm_dim)
+                                                           2 * self.enc_lstm_dim)).view(
+            bsize, -1,
+            2 * self.enc_lstm_dim)
 
         sent_keys = self.proj_enc(sent_output.view(-1,
-            2*self.enc_lstm_dim)).view(bsize, -1, 2*self.enc_lstm_dim)
+                                                   2 * self.enc_lstm_dim)).view(bsize,
+                                                                                -1,
+                                                                                2 * self.enc_lstm_dim)
 
         sent_max = torch.max(sent_output, 1)[0].squeeze(1)  # (bsize, 2*nhid)
         sent_summary = self.proj_query(sent_max).unsqueeze(1).expand_as(sent_keys)
@@ -677,7 +719,8 @@ class InnerAttentionYANGEncoder(nn.Module):
 
         sent_M = torch.tanh(sent_keys + sent_summary)
         # (bsize, seqlen, 2*nhid) YANG : M = tanh(Wh_i + Wh_avg
-        sent_w = self.query_embedding(torch.LongTensor(bsize*[0]).to(self.device)).unsqueeze(2)
+        sent_w = self.query_embedding(
+            torch.LongTensor(bsize * [0]).to(self.device)).unsqueeze(2)
         # (bsize, 2*nhid, 1)
 
         sent_alphas = self.softmax(sent_M.bmm(sent_w).squeeze(2)).unsqueeze(1)
@@ -692,10 +735,11 @@ class InnerAttentionYANGEncoder(nn.Module):
         return emb, sent_output
 
 
-
 """
 Hierarchical ConvNet
 """
+
+
 class ConvNetEncoder(nn.Module):
     def __init__(self, config, device='cuda'):
         super(ConvNetEncoder, self).__init__()
@@ -706,28 +750,26 @@ class ConvNetEncoder(nn.Module):
         self.pool_type = config['pool_type']
 
         self.convnet1 = nn.Sequential(
-            nn.Conv1d(self.word_emb_dim, 2*self.enc_lstm_dim, kernel_size=3,
+            nn.Conv1d(self.word_emb_dim, 2 * self.enc_lstm_dim, kernel_size=3,
                       stride=1, padding=1),
             nn.ReLU(inplace=True),
-            )
+        )
         self.convnet2 = nn.Sequential(
-            nn.Conv1d(2*self.enc_lstm_dim, 2*self.enc_lstm_dim, kernel_size=3,
+            nn.Conv1d(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim, kernel_size=3,
                       stride=1, padding=1),
             nn.ReLU(inplace=True),
-            )
+        )
         self.convnet3 = nn.Sequential(
-            nn.Conv1d(2*self.enc_lstm_dim, 2*self.enc_lstm_dim, kernel_size=3,
+            nn.Conv1d(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim, kernel_size=3,
                       stride=1, padding=1),
             nn.ReLU(inplace=True),
-            )
+        )
         self.convnet4 = nn.Sequential(
-            nn.Conv1d(2*self.enc_lstm_dim, 2*self.enc_lstm_dim, kernel_size=3,
+            nn.Conv1d(2 * self.enc_lstm_dim, 2 * self.enc_lstm_dim, kernel_size=3,
                       stride=1, padding=1),
             nn.ReLU(inplace=True),
-            )
+        )
         self.device = device
-
-
 
     def forward(self, sent_tuple):
         # sent_len: [max_len, ..., min_len] (batch)
@@ -735,7 +777,7 @@ class ConvNetEncoder(nn.Module):
 
         sent, sent_len = sent_tuple
 
-        sent = sent.transpose(0,1).transpose(1,2).contiguous()
+        sent = sent.transpose(0, 1).transpose(1, 2).contiguous()
         # batch, nhid, seqlen)
 
         sent = self.convnet1(sent)
@@ -752,16 +794,17 @@ class ConvNetEncoder(nn.Module):
 
         emb = torch.cat((u1, u2, u3, u4), 1)
 
-        return emb, sent.permute(0,2,1)
+        return emb, sent.permute(0, 2, 1)
 
 
 """
 BiLSTM
 """
 
+
 class BiLSTM(nn.Module):
-    def __init__(self, config, device = 'cuda'):
-        super(BiLSTM,self).__init__()
+    def __init__(self, config, device='cuda'):
+        super(BiLSTM, self).__init__()
         self.bsize = config['bsize']
         self.word_emb_dim = config['word_emb_dim']
         self.enc_lstm_dim = config['enc_lstm_dim']
@@ -775,16 +818,16 @@ class BiLSTM(nn.Module):
 
         self.device = device
 
-    def forward(self,sent_tuple):
-        sent,sent_len = sent_tuple
+    def forward(self, sent_tuple):
+        sent, sent_len = sent_tuple
         sent_len = sent_len.cpu()
         bsize = sent.size(1)
 
         sent_proj = self.relu(self.projection(sent))
 
-        out, (emb_ht,_) = self.enc_lstm(sent_proj)
+        out, (emb_ht, _) = self.enc_lstm(sent_proj)
         emb = emb_ht[-2:].transpose(0, 1).contiguous().view(bsize, -1)
-        return emb,out
+        return emb, out
 
 
 """
@@ -793,7 +836,7 @@ Main module for Natural Language Inference
 
 
 class NLINet(nn.Module):
-    def __init__(self, config, weights = None, device = 'cuda'):
+    def __init__(self, config, weights=None, device='cuda'):
         super(NLINet, self).__init__()
 
         # classifier
@@ -805,15 +848,16 @@ class NLINet(nn.Module):
         self.dpout_fc = config['dpout_fc']
 
         self.embedding = nn.Embedding(config['n_words'], config['word_emb_dim'])
-        self.embedding.load_state_dict({'weight':weights})
+        self.embedding.load_state_dict({'weight': weights})
         self.embedding.weight.requires_grad = False
 
-        self.encoder = eval(self.encoder_type)(config, device = device)
-        self.inputdim = 4*2*self.enc_lstm_dim
-        self.inputdim = 4*self.inputdim if self.encoder_type in \
-                        ["ConvNetEncoder", "InnerAttentionMILAEncoder"] else self.inputdim
-        self.inputdim = self.inputdim/2 if self.encoder_type == "LSTMEncoder" \
-                                        else self.inputdim
+        self.encoder = eval(self.encoder_type)(config, device=device)
+        self.inputdim = 4 * 2 * self.enc_lstm_dim
+        self.inputdim = 4 * self.inputdim if self.encoder_type in \
+                                             ["ConvNetEncoder",
+                                              "InnerAttentionMILAEncoder"] else self.inputdim
+        self.inputdim = self.inputdim / 2 if self.encoder_type == "LSTMEncoder" \
+            else self.inputdim
         self.inputdim = int(self.inputdim)
 
         self.lin1 = nn.Linear(self.inputdim, self.fc_dim)
@@ -834,7 +878,7 @@ class NLINet(nn.Module):
                 nn.Tanh(),
                 nn.Dropout(p=self.dpout_fc),
                 nn.Linear(self.fc_dim, self.n_classes),
-                )
+            )
         else:
             self.classifier = nn.Sequential(
                 nn.Dropout(p=self.dpout_fc),
@@ -845,23 +889,23 @@ class NLINet(nn.Module):
                 nn.ReLU(),
                 nn.Dropout(p=self.dpout_fc),
                 self.lin3
-                )
+            )
 
     def forward(self, s1, s2):
         # s1 : (s1, s1_len)
         s1_embed = self.embedding(s1[0])
         s2_embed = self.embedding(s2[0])
-        u, s1_out = self.encoder((s1_embed,s1[1]))
-        v, s2_out = self.encoder((s2_embed,s2[1]))
+        u, s1_out = self.encoder((s1_embed, s1[1]))
+        v, s2_out = self.encoder((s2_embed, s2[1]))
 
-        features = torch.cat((u, v, torch.abs(u-v), u*v), 1)
+        features = torch.cat((u, v, torch.abs(u - v), u * v), 1)
         output = self.classifier(features)
         return output, (s1_out, s2_out)
 
-    def encode(self, s1, is_probe = False):
+    def encode(self, s1, is_probe=False):
         # s1 : (s1, s1_len)
         s1_embed = self.embedding(s1[0])
-        emb, out = self.encoder((s1_embed,s1[1]))
+        emb, out = self.encoder((s1_embed, s1[1]))
 
         return emb, out
 
@@ -884,9 +928,9 @@ class ClassificationNet(nn.Module):
         self.dpout_fc = config['dpout_fc']
 
         self.encoder = eval(self.encoder_type)(config)
-        self.inputdim = 2*self.enc_lstm_dim
-        self.inputdim = 4*self.inputdim if self.encoder_type == "ConvNetEncoder" else self.inputdim
-        self.inputdim = self.enc_lstm_dim if self.encoder_type =="LSTMEncoder" else self.inputdim
+        self.inputdim = 2 * self.enc_lstm_dim
+        self.inputdim = 4 * self.inputdim if self.encoder_type == "ConvNetEncoder" else self.inputdim
+        self.inputdim = self.enc_lstm_dim if self.encoder_type == "LSTMEncoder" else self.inputdim
         self.classifier = nn.Sequential(
             nn.Linear(self.inputdim, 512),
             nn.Linear(512, self.n_classes),

@@ -1,8 +1,10 @@
 import math
+from copy import deepcopy
+
 import torch
 from torch.optim import Optimizer
+
 from .prioritydict import priorityDict
-from copy import deepcopy
 
 """
 Implementations for _C enhanced optimizers as well as their vanilla counterparts.
@@ -177,7 +179,8 @@ class SGD_C(Optimizer):
 
     def __init__(self, params, lr=0.001, kappa=1.0, dampening=0.,
                  weight_decay=0, momentum=0.,
-                 decay=0.7, topC=10, aggr='sum', sampling=None, critical_test=True, synced=True):
+                 decay=0.7, topC=10, aggr='sum', sampling=None, critical_test=True,
+                 synced=True):
 
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -189,7 +192,8 @@ class SGD_C(Optimizer):
             raise ValueError("Invalid alpha value: {}".format(topC))
 
         defaults = dict(lr=lr, kappa=kappa, dampening=dampening,
-                        weight_decay=weight_decay, momentum=momentum, aggr=aggr, decay=decay, gradHist={}, topC=topC,
+                        weight_decay=weight_decay, momentum=momentum, aggr=aggr,
+                        decay=decay, gradHist={}, topC=topC,
                         sampling=sampling, critical_test=critical_test, synced=synced)
 
         super(SGD_C, self).__init__(params, defaults)
@@ -290,7 +294,8 @@ class SGD_C(Optimizer):
                     if momentum != 0:
                         param_state = self.state[p]
                         if 'momentum_buffer' not in param_state:
-                            buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
+                            buf = param_state['momentum_buffer'] = torch.clone(
+                                d_p).detach()
                         else:
                             buf = param_state['momentum_buffer']
                             buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
@@ -375,7 +380,8 @@ class Adam(Optimizer):
                     continue
                 grad = p.grad
                 if grad.is_sparse:
-                    raise RuntimeError('Adam does not support sparse gradients, please consider SparseAdam instead')
+                    raise RuntimeError(
+                        'Adam does not support sparse gradients, please consider SparseAdam instead')
                 amsgrad = group['amsgrad']
 
                 state = self.state[p]
@@ -384,12 +390,15 @@ class Adam(Optimizer):
                 if len(state) == 0:
                     state['step'] = 0
                     #  Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p)  # memory_format=torch.preserve_format)
+                    state['exp_avg'] = torch.zeros_like(
+                        p)  # memory_format=torch.preserve_format)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p)  # memory_format=torch.preserve_format)
+                    state['exp_avg_sq'] = torch.zeros_like(
+                        p)  # memory_format=torch.preserve_format)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
-                        state['max_exp_avg_sq'] = torch.zeros_like(p)  # memory_format=torch.preserve_format)
+                        state['max_exp_avg_sq'] = torch.zeros_like(
+                            p)  # memory_format=torch.preserve_format)
 
                 exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
                 if amsgrad:
@@ -410,9 +419,11 @@ class Adam(Optimizer):
                     # Maintains the maximum of all 2nd moment running avg. till now
                     torch.max(max_exp_avg_sq, exp_avg_sq, out=max_exp_avg_sq)
                     # Use the max. for normalizing running avg. of gradient
-                    denom = (max_exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                    denom = (max_exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(
+                        group['eps'])
                 else:
-                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(
+                        group['eps'])
 
                 step_size = group['lr'] / bias_correction1
 
@@ -435,7 +446,8 @@ class Adam_C(Optimizer):
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
                  decay=0.7, kappa=1.0, topC=10,
-                 weight_decay=0, amsgrad=False, aggr='mean', sampling=None, critical_test=True, synced=True):
+                 weight_decay=0, amsgrad=False, aggr='mean', sampling=None,
+                 critical_test=True, synced=True):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -450,7 +462,8 @@ class Adam_C(Optimizer):
             raise ValueError("Invalid alpha value: {}".format(topC))
         defaults = dict(lr=lr, betas=betas, eps=eps,
                         weight_decay=weight_decay, aggr=aggr, amsgrad=amsgrad,
-                        kappa=kappa, topC=topC, decay=decay, sampling=sampling, critical_test=critical_test,
+                        kappa=kappa, topC=topC, decay=decay, sampling=sampling,
+                        critical_test=critical_test,
                         synced=synced)
 
         super(Adam_C, self).__init__(params, defaults)
@@ -503,7 +516,8 @@ class Adam_C(Optimizer):
                 if not group['synced']:
                     grad_norm = grad.norm()
                 if grad.is_sparse:
-                    raise RuntimeError('Adam does not support sparse gradients, please consider SparseAdam instead')
+                    raise RuntimeError(
+                        'Adam does not support sparse gradients, please consider SparseAdam instead')
                 amsgrad = group['amsgrad']
                 kappa = group['kappa']
                 decay = group['decay']
@@ -518,24 +532,30 @@ class Adam_C(Optimizer):
                 if len(state) == 0:
                     state['step'] = 0
                     # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
+                    state['exp_avg'] = torch.zeros_like(
+                        p.data)  # memory_format=torch.preserve_format)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
+                    state['exp_avg_sq'] = torch.zeros_like(
+                        p.data)  # memory_format=torch.preserve_format)
                     if kappa > 0.:
                         state['critical gradients'] = priorityDict()
-                        state['critical gradients'].setHyper(decay_rate=decay, K=topc, sampling=sampling)
+                        state['critical gradients'].setHyper(decay_rate=decay, K=topc,
+                                                             sampling=sampling)
                         state['critical gradients'][grad_norm] = deepcopy(grad)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
-                        state['max_exp_avg_sq'] = torch.zeros_like(p.data)  # memory_format=torch.preserve_format)
+                        state['max_exp_avg_sq'] = torch.zeros_like(
+                            p.data)  # memory_format=torch.preserve_format)
                 else:
                     if kappa > 0.:
                         aggr_grad = aggregate(grad, state['critical gradients'], aggr)
                         if state['critical gradients'].isFull():
                             if critical_test:
-                                if grad_norm > state['critical gradients'].pokeSmallest():
+                                if grad_norm > state[
+                                    'critical gradients'].pokeSmallest():
                                     self.offline_grad['yes'] += 1
-                                    state['critical gradients'][grad_norm] = deepcopy(grad)
+                                    state['critical gradients'][grad_norm] = deepcopy(
+                                        grad)
                                 else:
                                     self.offline_grad['no'] += 1
                             else:
@@ -564,9 +584,11 @@ class Adam_C(Optimizer):
                     # Maintains the maximum of all 2nd moment running avg. till now
                     torch.max(max_exp_avg_sq, exp_avg_sq, out=max_exp_avg_sq)
                     # Use the max. for normalizing running avg. of gradient
-                    denom = (max_exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                    denom = (max_exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(
+                        group['eps'])
                 else:
-                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(
+                        group['eps'])
 
                 step_size = group['lr'] / bias_correction1
 
@@ -574,13 +596,17 @@ class Adam_C(Optimizer):
                 self.g_analysis['count'] += 1
                 self.g_analysis['gt'] += p.grad.data.norm()
                 if 'mid' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMin().norm()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].getMin().norm()
                 elif 'median' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMedian().norm()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].getMedian().norm()
                 elif 'max' in aggr:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].getMax().norm()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].getMax().norm()
                 else:
-                    self.g_analysis['gc_aggr'] += state['critical gradients'].averageTopC()
+                    self.g_analysis['gc_aggr'] += state[
+                        'critical gradients'].averageTopC()
 
                 state['critical gradients'].decay()
 
@@ -661,11 +687,14 @@ class RMSprop(Optimizer):
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
-                    state['square_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    state['square_avg'] = torch.zeros_like(p,
+                                                           memory_format=torch.preserve_format)
                     if group['momentum'] > 0:
-                        state['momentum_buffer'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        state['momentum_buffer'] = torch.zeros_like(p,
+                                                                    memory_format=torch.preserve_format)
                     if group['centered']:
-                        state['grad_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        state['grad_avg'] = torch.zeros_like(p,
+                                                             memory_format=torch.preserve_format)
 
                 square_avg = state['square_avg']
                 alpha = group['alpha']
@@ -680,7 +709,8 @@ class RMSprop(Optimizer):
                 if group['centered']:
                     grad_avg = state['grad_avg']
                     grad_avg.mul_(alpha).add_(grad, alpha=1 - alpha)
-                    avg = square_avg.addcmul(grad_avg, grad_avg, value=-1).sqrt_().add_(group['eps'])
+                    avg = square_avg.addcmul(grad_avg, grad_avg, value=-1).sqrt_().add_(
+                        group['eps'])
                 else:
                     avg = square_avg.sqrt().add_(group['eps'])
 
@@ -780,11 +810,14 @@ class RMSprop_C(Optimizer):
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
-                    state['square_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    state['square_avg'] = torch.zeros_like(p,
+                                                           memory_format=torch.preserve_format)
                     if group['momentum'] > 0:
-                        state['momentum_buffer'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        state['momentum_buffer'] = torch.zeros_like(p,
+                                                                    memory_format=torch.preserve_format)
                     if group['centered']:
-                        state['grad_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        state['grad_avg'] = torch.zeros_like(p,
+                                                             memory_format=torch.preserve_format)
                     if kappa > 0.:
                         state['critical gradients'] = priorityDict()
                         state['critical gradients'].setHyper(decay_rate=decay, K=topc)
@@ -815,7 +848,8 @@ class RMSprop_C(Optimizer):
                 if group['centered']:
                     grad_avg = state['grad_avg']
                     grad_avg.mul_(alpha).add_(grad, alpha=1 - alpha)
-                    avg = square_avg.addcmul(grad_avg, grad_avg, value=-1).sqrt_().add_(group['eps'])
+                    avg = square_avg.addcmul(grad_avg, grad_avg, value=-1).sqrt_().add_(
+                        group['eps'])
                 else:
                     avg = square_avg.sqrt().add_(group['eps'])
 
