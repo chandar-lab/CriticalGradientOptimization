@@ -96,7 +96,10 @@ class priorityDict(dict):
     def averageTopC(self):
         ave = 0.
         if len(self._heap) > 0:
-            ave = sum([it.t.norm() for it in self._heap]) / float(len(self._heap))
+            if not self.hist:
+                ave = sum([it.t.norm() for it in self._heap]) / float(len(self._heap))
+            else:
+                ave = sum([it.t.g.norm() for it in self._heap]) / float(len(self._heap))
         return ave
 
     def pokeSmallest(self):
@@ -107,7 +110,7 @@ class priorityDict(dict):
         it = self._heap[0]
         return it.p
 
-    def pokesmallest_age(self):
+    def pokeSmallestAge(self):
         """Return the lowest priority.
         Raises IndexError if the object is empty.
         """
@@ -254,9 +257,3 @@ class priorityDict(dict):
             ages.append(item.t.epoch_age)
             item.t.resetEpoch()
         return ages
-
-    def averageTopC(self):
-        ave = 0.
-        if len(self._heap) > 0:
-            ave = sum([it.t.g.norm() for it in self._heap]) / float(len(self._heap))
-        return ave

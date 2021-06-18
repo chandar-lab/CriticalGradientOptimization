@@ -1510,7 +1510,7 @@ class SGD_C_HIST(Optimizer):
                         if crit_buf.isFull():
                             if total_norm > crit_buf.pokeSmallest():
                                 self.offline_grad['yes'] += 1
-                                age_to_keep = crit_buf.pokesmallest_age()
+                                age_to_keep = crit_buf.pokeSmallestAge()
                                 crit_buf[total_norm] = deepcopy(d_p)
                             else:
                                 self.offline_grad['no'] += 1
