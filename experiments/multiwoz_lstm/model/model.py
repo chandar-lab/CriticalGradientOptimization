@@ -258,7 +258,6 @@ class DecoderRNN(nn.Module):
         embedded = F.dropout(embedded, self.dropout_rate)
 
         output = embedded
-        # output = F.relu(embedded)
 
         output, hidden = self.rnn(output, hidden)
 

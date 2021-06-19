@@ -1,11 +1,3 @@
-import math
-from copy import deepcopy
-
-import torch
-from torch.optim import Optimizer
-
-from .prioritydict import priorityDict
-
 """
 Implementations for _C enhanced optimizers as well as their vanilla counterparts.
 Vanilla algorthims are sourced from PyTorch source, and _C iterations are largely
@@ -14,10 +6,19 @@ based on those as well.
 https://github.com/pytorch/pytorch/tree/master/torch/optim
 """
 
+import math
+from copy import deepcopy
+
+import torch
+from torch.optim import Optimizer
+
+from .prioritydict import priorityDict
+
 
 def aggregate(d_p, crit_buf, func, kappa=1.0):
     """
-    Reusable aggregation function to join current iteration gradient and critical gradients
+    Reusable aggregation function to join current iteration gradient and critical
+    gradients
 
     :param d_p: Current-iteration gradient
     :param crit_buf: Buffer of Critical Gradients

@@ -1,7 +1,7 @@
 import json
 import re
 
-from utils.nlp import normalize
+from nlp import normalize
 
 digitpat = re.compile('\d+')
 timepat = re.compile("\d{1,2}[:]\d{1,2}")

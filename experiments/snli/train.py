@@ -1,6 +1,5 @@
 import sys
 
-# from code.rnn import RecurrentEncoder, Encoder, AttnDecoder, Decoder
 from dataset_utils.data_iterator import *
 
 sys.path.append('../..')

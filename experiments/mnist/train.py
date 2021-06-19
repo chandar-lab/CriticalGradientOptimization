@@ -12,7 +12,8 @@ import torch.optim as optim
 import wandb
 
 from experiments.mnist.model.encoder_decoder import EncoderDecoder
-from experiments.mnist.model.models import ConvNetEncoder, ClassDecoder, LogisticRegression, FCLayer
+from experiments.mnist.model.models import ConvNetEncoder, ClassDecoder, \
+    LogisticRegression, FCLayer
 
 sys.path.append('../..')
 from data_loader import load_data_subset
@@ -49,7 +50,8 @@ def train(model, iterator, optimizer, criterion, clip=10):
     Returns:
         epoch_loss: Average loss of the epoch.
     '''
-    #  some layers have different behavior during train/and evaluation (like BatchNorm, Dropout) so setting it matters.
+    #  some layers have different behavior during train/and evaluation
+    #  (like BatchNorm, Dropout) so setting it matters.
     model.train()
     # loss
     epoch_loss = 0
@@ -94,7 +96,8 @@ def evaluate(model, iterator, criterion):
     Returns:
         epoch_loss: Average loss of the epoch.
     '''
-    #  some layers have different behavior during train/and evaluation (like BatchNorm, Dropout) so setting it matters.
+    #  some layers have different behavior during train/and evaluation
+    #  (like BatchNorm, Dropout) so setting it matters.
     model.eval()
     # loss
     epoch_loss = 0
@@ -112,8 +115,8 @@ def evaluate(model, iterator, criterion):
             total += trg.size(0)
             output, hidden = model(src)
             loss = criterion(output, trg)
-            pred = output.argmax(dim=1,
-                                 keepdim=True)  # get the index of the max log-probability
+            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max
+            # log-probability
             correct = pred.eq(trg.view_as(pred)).sum()
 
             epoch_loss += loss.item()

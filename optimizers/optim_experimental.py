@@ -1,3 +1,8 @@
+"""
+Collection of Experimental optimizers developed during our research.
+Included for completeness.
+"""
+
 import math
 from copy import deepcopy
 
@@ -6,10 +11,6 @@ from torch.optim import Optimizer
 
 from .prioritydict import priorityDict
 
-"""
-Collection of Experimental optimizers developed during our research. 
-Included for completeness.
-"""
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 

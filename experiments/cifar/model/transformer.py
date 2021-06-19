@@ -214,9 +214,12 @@ class Encoder(nn.Module):
     def forward(self, source_sequence, source_mask):
         '''
         input:
-            source_sequence (sequence of source tokens) of shape (batch size, sequence length)
-            source_mask (mask over input sequence) of shape (batch size, 1, sequence length)
-        output: sequence of vectors after embedding, postional encoding, attention and normalization
+            source_sequence (sequence of source tokens) of shape (batch size,
+            sequence length)
+            source_mask (mask over input sequence) of shape (batch size, 1, sequence
+            length)
+        output: sequence of vectors after embedding, postional encoding, attention
+        and normalization
             shape (batch size, sequence length, embedding dimensions)
         '''
         vector_sequence = self.embed(source_sequence)
@@ -246,12 +249,15 @@ class DecoderLayer(nn.Module):
     def forward(self, de_out, de_mask, en_out, en_mask):
         '''
         inputs:
-            de_out - decoder ouputs so far (batch size, output sequence length, embedding dimensions)
+            de_out - decoder ouputs so far (batch size, output sequence length,
+            embedding dimensions)
             de_mask (batch size, output sequence length, output sequence length)
-            en_out - encoder output (batch size, input sequence length, embedding dimensions)
+            en_out - encoder output (batch size, input sequence length, embedding
+            dimensions)
             en_mask (batch size, 1, input sequence length)
         ouputs:
-            de_out (next decoder output) (batch size, output sequence length, embedding dimensions)
+            de_out (next decoder output) (batch size, output sequence length,
+            embedding dimensions)
         '''
         de_nrm = self.norm_1(de_out)
         # Self Attention

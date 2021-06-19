@@ -6,7 +6,7 @@ import sqlite3
 from nltk.translate.bleu_score import sentence_bleu as bleu_score
 
 from experiments.multiwoz_lstm import utils as delex
-from experiments.multiwoz_lstm.utils import BLEUScorer
+from utils import BLEUScorer
 from utils import normalize
 
 
@@ -192,13 +192,14 @@ class MultiWozEvaluator(BaseEvaluator):
                                 if venue_offered[domain][0] == ven:
                                     flag = True
                                     break
-                            if not flag and venues:  # sometimes there are no results so sample won't work
+                            # sometimes there are no results so sample won't work
+                            if not flag and venues:
                                 # print venues
                                 venue_offered[domain] = random.sample(venues, 1)
                     else:  # not limited so we can provide one
                         venue_offered[domain] = '[' + domain + '_name]'
 
-                # ATTENTION: assumption here - we didn't provide phone or address twice! etc
+                # ATTENTION: assumption here - we didn't provide phone or address twice!
                 for requestable in requestables:
                     if requestable == 'reference':
                         if domain + '_reference' in sent_t:
@@ -236,20 +237,9 @@ class MultiWozEvaluator(BaseEvaluator):
             if domain in ['taxi', 'police', 'hospital']:
                 venue_offered[domain] = '[' + domain + '_name]'
 
-            # the original method
-            # if domain == 'train':
-            #     if not venue_offered[domain]:
-            #         # if realDialogue['goal'][domain].has_key('reqt') and 'id' not in realDialogue['goal'][domain]['reqt']:
-            #         if 'reqt' in realDialogue['goal'][domain] and 'id' not in realDialogue['goal'][domain]['reqt']:
-            #             venue_offered[domain] = '[' + domain + '_name]'
 
-            # Wrong one in HDSA
-            # if domain == 'train':
-            #     if not venue_offered[domain]:
-            #         if goal[domain]['requestable'] and 'id' not in goal[domain]['requestable']:
-            #             venue_offered[domain] = '[' + domain + '_name]'
-
-            # if id was not requested but train was found we dont want to override it to check if we booked the right train
+            # if id was not requested but train was found we dont want to override it
+            # to check if we booked the right train
             if domain == 'train' and (
                     not venue_offered[domain] and 'id' not in goal['train'][
                 'requestable']):
@@ -524,9 +514,9 @@ class MultiWozEvaluator(BaseEvaluator):
             data = delex_dialogues[filename]
             goal, success, match, requestables, _ = self._evaluateRealDialogue(data,
                                                                                filename)
-            success, match, stats = self._evaluateGeneratedDialogue(dial, goal, data,
-                                                                    requestables,
-                                                                    soft_acc=mode == 'soft')
+            success, match, stats = \
+                self._evaluateGeneratedDialogue(dial, goal, data,
+                                                requestables, soft_acc=mode == 'soft')
 
             successes += success
             matches += match

@@ -71,22 +71,13 @@ def trainIters(model, train_dials, val_dials, n_epochs=10, args='args'):
             model.optimizer.zero_grad()
             model.optimizer_policy.zero_grad()
 
-            input_tensor, target_tensor, bs_tensor, db_tensor = util.loadDialogue(model,
-                                                                                  val_file,
-                                                                                  input_tensor,
-                                                                                  target_tensor,
-                                                                                  bs_tensor,
-                                                                                  db_tensor)
+            input_tensor, target_tensor, bs_tensor, db_tensor = util.loadDialogue(
+                model, val_file, input_tensor, target_tensor, bs_tensor, db_tensor)
 
             if len(db_tensor) > args.batch_size:
-                print_loss_total, print_act_total, print_grad_total = train(model,
-                                                                            print_loss_total,
-                                                                            print_act_total,
-                                                                            print_grad_total,
-                                                                            input_tensor,
-                                                                            target_tensor,
-                                                                            bs_tensor,
-                                                                            db_tensor)
+                print_loss_total, print_act_total, print_grad_total = train(
+                    model, print_loss_total, print_act_total, print_grad_total,
+                    input_tensor, target_tensor, bs_tensor, db_tensor)
                 input_tensor = [];
                 target_tensor = [];
                 bs_tensor = [];
@@ -110,12 +101,9 @@ def trainIters(model, train_dials, val_dials, n_epochs=10, args='args'):
             target_tensor = [];
             bs_tensor = [];
             db_tensor = []
-            input_tensor, target_tensor, bs_tensor, db_tensor = util.loadDialogue(model,
-                                                                                  val_file,
-                                                                                  input_tensor,
-                                                                                  target_tensor,
-                                                                                  bs_tensor,
-                                                                                  db_tensor)
+            input_tensor, target_tensor, bs_tensor, db_tensor = util.loadDialogue(
+                model, val_file, input_tensor, target_tensor, bs_tensor, db_tensor)
+
             # create an empty matrix with padding tokens
             input_tensor, input_lengths = util.padSequence(input_tensor)
             target_tensor, target_lengths = util.padSequence(target_tensor)
@@ -157,7 +145,8 @@ def loadDictionaries():
     with open('data/output_lang.word2index.json') as f:
         output_lang_word2index = json.load(f)
 
-    return input_lang_index2word, output_lang_index2word, input_lang_word2index, output_lang_word2index
+    return input_lang_index2word, output_lang_index2word, input_lang_word2index, \
+           output_lang_word2index
 
 
 def hyper_evaluate(config):
@@ -235,7 +224,8 @@ def hyper_evaluate(config):
     torch.manual_seed(args.seed)
     device = torch.device("cuda" if args.cuda else "cpu")
 
-    input_lang_index2word, output_lang_index2word, input_lang_word2index, output_lang_word2index = loadDictionaries()
+    input_lang_index2word, output_lang_index2word, input_lang_word2index, \
+    output_lang_word2index = loadDictionaries()
     print(len(output_lang_index2word))
     # Load training file list:
     with open('data/train_dials.json') as outfile:
@@ -269,8 +259,6 @@ PARAM_GRID = list(product(
     [0.001],  # lr
     [0.7],  # decay
     [5, 10, 20, 50, 100]  # topC
-    #    ['none'],         # aggr
-    #    [1.0]               # kappa
 ))
 
 PARAM_GRID_ = list(product(

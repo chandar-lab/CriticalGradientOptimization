@@ -101,12 +101,8 @@ def decode(args, num=1):
             target_tensor = [];
             bs_tensor = [];
             db_tensor = []
-            input_tensor, target_tensor, bs_tensor, db_tensor = util.loadDialogue(model,
-                                                                                  val_file,
-                                                                                  input_tensor,
-                                                                                  target_tensor,
-                                                                                  bs_tensor,
-                                                                                  db_tensor)
+            input_tensor, target_tensor, bs_tensor, db_tensor = util.loadDialogue(
+                model,val_file, input_tensor, target_tensor, bs_tensor, db_tensor)
             # create an empty matrix with padding tokens
             input_tensor, input_lengths = util.padSequence(input_tensor)
             target_tensor, target_lengths = util.padSequence(target_tensor)
@@ -133,12 +129,9 @@ def decode(args, num=1):
             target_tensor = [];
             bs_tensor = [];
             db_tensor = []
-            input_tensor, target_tensor, bs_tensor, db_tensor = util.loadDialogue(model,
-                                                                                  test_file,
-                                                                                  input_tensor,
-                                                                                  target_tensor,
-                                                                                  bs_tensor,
-                                                                                  db_tensor)
+            input_tensor, target_tensor, bs_tensor, db_tensor = util.loadDialogue(
+                model, test_file, input_tensor, target_tensor, bs_tensor, db_tensor)
+
             # create an empty matrix with padding tokens
             input_tensor, input_lengths = util.padSequence(input_tensor)
             target_tensor, target_lengths = util.padSequence(target_tensor)

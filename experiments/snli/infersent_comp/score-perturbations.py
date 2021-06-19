@@ -43,10 +43,7 @@ def comb(list1, list2):
 
 def prune_dist(list_test_pairs):
     big_list, sm_list, test_pairs = list_test_pairs
-    # print(os.getpid())
     pruned_pairs = []
-    # print(len(big_list))
-    # print(len(sm_list))
     for pair in comb(sm_list, big_list):
         i = test_pairs[pair[0]]
         j = test_pairs[pair[1]]

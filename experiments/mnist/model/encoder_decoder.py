@@ -25,7 +25,8 @@ class EncoderDecoder(nn.Module):
     def forward(self, src, trg=None, teacher_forcing_ratio=1.0, probetask=False):
         # src is of shape [sequence_len, batch_size]
         # trg is of shape [sequence_len, batch_size]
-        # if teacher_forcing_ratio is 0.5 we use ground-truth inputs 50% of time and 50% time we use decoder outputs.
+        # if teacher_forcing_ratio is 0.5 we use ground-truth inputs 50%
+        # of time and 50% time we use decoder outputs.
 
         if self.data == 'text':
             batch_size = trg.shape[1]
@@ -35,7 +36,8 @@ class EncoderDecoder(nn.Module):
             # to store the outputs of the decoder
             outputs = torch.zeros(max_len, batch_size, trg_vocab_size).to(device)
 
-            # context vector, last hidden and cell state of encoder to initialize the decoder
+            # context vector, last hidden and cell state of encoder to
+            # initialize the decoder
             encoder_outputs, hidden, cell = self.encoder(src)
             # first input to the decoder is the <sos> tokens
             hidden_enc = hidden
