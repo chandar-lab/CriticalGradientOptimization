@@ -48,7 +48,7 @@ def data_iter(batch_size, features, labels):
         yield features[batch_indices], labels[batch_indices]
 
 
-def HyperEvaluate(config):
+def hyper_evaluate(config):
     """
     Completes training, validation, and testing for one set of hyperparameters
     :param config: dictionary of hyperparameters to train on
@@ -184,4 +184,4 @@ for param_ix in range(this_worker, len(PARAM_GRID), N_WORKERS):
     config['kappa'] = k
     config['l2'] = ts
 
-    HyperEvaluate(config)
+    hyper_evaluate(config)
